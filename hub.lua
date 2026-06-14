@@ -1470,7 +1470,8 @@ local BillionairePage = makePage()
 local TrollPage       = makePage()
 local DropPage        = makePage()
 local GamesPage       = makePage()
-local allPages={CombatPage,ESPPage,MovePage,ExtrasPage,ConfigPage,BillionairePage,TrollPage,DropPage,GamesPage}
+local LemonsPage      = makePage()
+local allPages={CombatPage,ESPPage,MovePage,ExtrasPage,ConfigPage,BillionairePage,TrollPage,DropPage,GamesPage,LemonsPage}
 
 -- ── Sidebar Buttons ────────────────────────────────────
 local CATS={
@@ -1483,6 +1484,7 @@ local CATS={
     {label="😈 TROLL", page=TrollPage},
     {label="🔴 DROP",  page=DropPage},
     {label="🎮 GAMES", page=GamesPage},
+    {label="🍋 LEMONS", page=LemonsPage},
 }
 local function switchCat(idx)
     for _,p in ipairs(allPages) do p.Visible=false end
@@ -2674,6 +2676,108 @@ do
         info.LayoutOrder=O(); info.Parent=GamesPage
     end
 end -- GAMES do..end
+
+do -- 🍋 LEMONS (Sell Lemons tycoon)
+    -- ── State ───────────────────────────────────────────
+    local LEMONS={AutoUpgrade=false, UpgradeDelay=1.0}
+
+    -- Add more names here as user provides them
+    local UPGRADE_LIST={"Lemon Stand"}
+    local selUpgrade="Lemon Stand"
+    local upgradeTask=nil
+    local selBtns={}   -- {name -> {row, dot}} for radio UI
+
+    -- ── Logic ───────────────────────────────────────────
+    local function findTycoon()
+        local mine=nil
+        for _,t in ipairs(workspace:GetChildren()) do
+            if t.Name:match("^Tycoon") and not mine then
+                pcall(function()
+                    local ow=t:FindFirstChild("Owner")
+                    if not ow then return end
+                    if ow.Value==LP or ow.Value==LP.Name then mine=t end
+                end)
+            end
+        end
+        return mine
+    end
+
+    local function doUpgrade()
+        local t=findTycoon(); if not t then
+            if notify then notify("Lemons: tycoon not found") end; return
+        end
+        local ok,err=pcall(function()
+            t.Purchases[selUpgrade][selUpgrade][selUpgrade].Upgrade:InvokeServer(1)
+        end)
+        if not ok and notify then notify("Lemons: "..tostring(err):sub(1,60)) end
+    end
+
+    local function setAutoUpgrade(v)
+        LEMONS.AutoUpgrade=v
+        if upgradeTask then task.cancel(upgradeTask); upgradeTask=nil end
+        if v then
+            upgradeTask=task.spawn(function()
+                while LEMONS.AutoUpgrade do
+                    doUpgrade()
+                    task.wait(LEMONS.UpgradeDelay)
+                end
+            end)
+        end
+    end
+
+    table.insert(cleanupHooks,function()
+        LEMONS.AutoUpgrade=false
+        if upgradeTask then task.cancel(upgradeTask); upgradeTask=nil end
+    end)
+
+    -- ── UI ──────────────────────────────────────────────
+    makeDivider(LemonsPage,"AUTO UPGRADE")
+
+    makeModCard(LemonsPage,"Auto Upgrade",LEMONS,"AutoUpgrade",
+        function(v) setAutoUpgrade(v) end,
+        "Repeatedly upgrades the selected stand in your tycoon. Pick the target below.",
+        function(sf)
+            makeSlider(sf,"Delay",0.1,10,LEMONS.UpgradeDelay,0.1,"%.1f s",
+                function(v) LEMONS.UpgradeDelay=v end)
+            makeButton(sf,"Upgrade Once",function() doUpgrade() end)
+        end
+    )
+
+    makeDivider(LemonsPage,"UPGRADE TARGET")
+
+    -- Radio-style selector: one row per upgrade item
+    local function updateSelUI()
+        for n,refs in pairs(selBtns) do
+            local on=(n==selUpgrade)
+            refs.row.BackgroundColor3=on and CARD_ON or CARD_OFF
+            refs.dot.BackgroundColor3=on and ACCENT or DIM
+        end
+    end
+
+    for _,itemName in ipairs(UPGRADE_LIST) do
+        local row=Instance.new("Frame"); row.Size=UDim2.new(1,0,0,36)
+        row.BackgroundColor3=(itemName==selUpgrade) and CARD_ON or CARD_OFF
+        row.BorderSizePixel=0; row.LayoutOrder=O(); row.Parent=LemonsPage
+        Instance.new("UICorner",row).CornerRadius=UDim.new(0,7)
+        local st=Instance.new("UIStroke",row); st.Color=BORDER; st.Thickness=1
+        local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-40,1,0)
+        lbl.Position=UDim2.new(0,12,0,0); lbl.BackgroundTransparency=1
+        lbl.Text=itemName; lbl.TextColor3=WHITE; lbl.Font=Enum.Font.GothamBold
+        lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Parent=row
+        local dot=Instance.new("Frame"); dot.Size=UDim2.new(0,10,0,10)
+        dot.AnchorPoint=Vector2.new(1,0.5); dot.Position=UDim2.new(1,-12,0.5,0)
+        dot.BackgroundColor3=(itemName==selUpgrade) and ACCENT or DIM
+        dot.BorderSizePixel=0; dot.Parent=row
+        Instance.new("UICorner",dot).CornerRadius=UDim.new(1,0)
+        local clickBtn=Instance.new("TextButton"); clickBtn.Size=UDim2.new(1,0,1,0)
+        clickBtn.BackgroundTransparency=1; clickBtn.Text=""; clickBtn.Parent=row
+        selBtns[itemName]={row=row,dot=dot}
+        clickBtn.MouseButton1Click:Connect(function()
+            selUpgrade=itemName; updateSelUI()
+        end)
+    end
+
+end -- LEMONS do..end
 
 end -- _hub()
 
