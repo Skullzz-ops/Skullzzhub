@@ -25,6 +25,7 @@ local DIM     = Color3.fromRGB(90,90,120)
 local WHITE   = Color3.fromRGB(255,255,255)
 local ACCENT  = Color3.fromRGB(90,100,220)
 local accentEls = {}   -- frames/strokes to recolor when theme changes
+local SKULL_IMG = "rbxassetid://0"  -- TODO: replace 0 with your uploaded asset ID
 
 -- ── Settings ───────────────────────────────────────────
 local AB = {
@@ -123,10 +124,11 @@ do
     local cStroke=Instance.new("UIStroke",card); cStroke.Color=ACCENT
     cStroke.Thickness=1.5; cStroke.Transparency=1
 
-    local icon=Instance.new("TextLabel"); icon.Size=UDim2.new(1,0,0,52)
-    icon.Position=UDim2.new(0,0,0,20); icon.BackgroundTransparency=1
-    icon.Text="💀"; icon.TextSize=42; icon.Font=Enum.Font.GothamBold
-    icon.TextColor3=WHITE; icon.TextTransparency=1; icon.ZIndex=202; icon.Parent=card
+    local icon=Instance.new("ImageLabel"); icon.Size=UDim2.new(0,54,0,54)
+    icon.AnchorPoint=Vector2.new(0.5,0); icon.Position=UDim2.new(0.5,0,0,14)
+    icon.BackgroundTransparency=1; icon.Image=SKULL_IMG
+    icon.ScaleType=Enum.ScaleType.Fit; icon.ImageTransparency=1
+    icon.ZIndex=202; icon.Parent=card
 
     local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,0,0,22)
     title.Position=UDim2.new(0,0,0,74); title.BackgroundTransparency=1
@@ -1115,9 +1117,10 @@ TitleFix=Instance.new("Frame"); TitleFix.Size=UDim2.new(1,0,0,10)
 TitleFix.Position=UDim2.new(0,0,1,-10); TitleFix.BackgroundColor3=DARKER
 TitleFix.BorderSizePixel=0; TitleFix.Parent=TitleBar
 
-local TitleIcon=Instance.new("TextLabel"); TitleIcon.Size=UDim2.new(0,28,1,0)
-TitleIcon.Position=UDim2.new(0,10,0,0); TitleIcon.BackgroundTransparency=1
-TitleIcon.Text="💀"; TitleIcon.TextSize=16; TitleIcon.Font=Enum.Font.GothamBold; TitleIcon.Parent=TitleBar
+local TitleIcon=Instance.new("ImageLabel"); TitleIcon.Size=UDim2.new(0,26,0,26)
+TitleIcon.AnchorPoint=Vector2.new(0,0.5); TitleIcon.Position=UDim2.new(0,10,0.5,0)
+TitleIcon.BackgroundTransparency=1; TitleIcon.Image=SKULL_IMG
+TitleIcon.ScaleType=Enum.ScaleType.Fit; TitleIcon.Parent=TitleBar
 local TitleText=Instance.new("TextLabel"); TitleText.Size=UDim2.new(0,140,1,0)
 TitleText.Position=UDim2.new(0,34,0,0); TitleText.BackgroundTransparency=1
 TitleText.Text="SKULLZZ HUB"; TitleText.TextColor3=WHITE; TitleText.TextSize=13
@@ -1178,11 +1181,14 @@ end
 local MinIcon=Instance.new("TextButton"); MinIcon.Size=UDim2.new(0,48,0,48)
 MinIcon.AnchorPoint=Vector2.new(0,0.5); MinIcon.Position=UDim2.new(0,18,0.5,0)
 MinIcon.BackgroundColor3=DARKER; MinIcon.AutoButtonColor=false
-MinIcon.Text="💀"; MinIcon.TextSize=26; MinIcon.Font=Enum.Font.GothamBold
-MinIcon.TextColor3=WHITE; MinIcon.BorderSizePixel=0
+MinIcon.Text=""; MinIcon.BorderSizePixel=0
 MinIcon.Visible=false; MinIcon.Active=true; MinIcon.Draggable=true
 MinIcon.ZIndex=60; MinIcon.Parent=Gui
 Instance.new("UICorner",MinIcon).CornerRadius=UDim.new(0,12)
+local MinImg=Instance.new("ImageLabel"); MinImg.Size=UDim2.new(1,-6,1,-6)
+MinImg.AnchorPoint=Vector2.new(0.5,0.5); MinImg.Position=UDim2.new(0.5,0,0.5,0)
+MinImg.BackgroundTransparency=1; MinImg.Image=SKULL_IMG
+MinImg.ScaleType=Enum.ScaleType.Fit; MinImg.ZIndex=61; MinImg.Parent=MinIcon
 local MinIconStroke=Instance.new("UIStroke",MinIcon)
 MinIconStroke.Color=ACCENT; MinIconStroke.Thickness=1.5
 table.insert(accentEls,MinIconStroke)
