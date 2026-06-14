@@ -25,7 +25,7 @@ local DIM     = Color3.fromRGB(90,90,120)
 local WHITE   = Color3.fromRGB(255,255,255)
 local ACCENT  = Color3.fromRGB(90,100,220)
 local accentEls = {}   -- frames/strokes to recolor when theme changes
-local SKULL_IMG = "rbxassetid://0"  -- TODO: replace 0 with your uploaded asset ID
+local SKULL_IMG = "rbxassetid://135094534201893"  -- TODO: replace 0 with your uploaded asset ID
 
 -- ── Settings ───────────────────────────────────────────
 local AB = {
@@ -152,7 +152,7 @@ do
     -- fade everything in
     TweenService:Create(card,TweenInfo.new(0.3),{BackgroundTransparency=0}):Play()
     TweenService:Create(cStroke,TweenInfo.new(0.3),{Transparency=0.15}):Play()
-    TweenService:Create(icon,TweenInfo.new(0.35),{TextTransparency=0}):Play()
+    TweenService:Create(icon,TweenInfo.new(0.35),{ImageTransparency=0}):Play()
     TweenService:Create(title,TweenInfo.new(0.35),{TextTransparency=0}):Play()
     TweenService:Create(sub,TweenInfo.new(0.35),{TextTransparency=0.3}):Play()
     TweenService:Create(track,TweenInfo.new(0.35),{BackgroundTransparency=0}):Play()
@@ -166,7 +166,7 @@ do
         TweenService:Create(backdrop,ti,{BackgroundTransparency=1}):Play()
         TweenService:Create(card,ti,{BackgroundTransparency=1}):Play()
         TweenService:Create(cStroke,ti,{Transparency=1}):Play()
-        TweenService:Create(icon,ti,{TextTransparency=1}):Play()
+        TweenService:Create(icon,ti,{ImageTransparency=1}):Play()
         TweenService:Create(title,ti,{TextTransparency=1}):Play()
         TweenService:Create(sub,ti,{TextTransparency=1}):Play()
         TweenService:Create(track,ti,{BackgroundTransparency=1}):Play()
