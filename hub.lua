@@ -29,7 +29,7 @@ local SKULL_IMG = "rbxassetid://135094534201893"  -- TODO: replace 0 with your u
 
 -- ── Settings ───────────────────────────────────────────
 local AB = {
-    Enabled=true, FOV=200, Smoothness=0.35, Damping=0.8,
+    Enabled=true, FOV=200, Smoothness=0.7, Damping=1.0,
     Prediction=2, AutoPrediction=false, TargetPart="Head",
     ShowFOVCircle=true, CircleColor=WHITE, CircleThickness=2,
     ShowTargetName=true, ShowHitChance=true,
@@ -335,27 +335,27 @@ local function CreateESP(player)
     hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Adornee=char; hl.Parent=char
 
     local bb=Instance.new("BillboardGui"); bb.Name="ESPTag"
-    bb.Size=UDim2.new(0,160,0,58); bb.StudsOffset=Vector3.new(0,3.2,0)
+    bb.Size=UDim2.new(0,130,0,44); bb.StudsOffset=Vector3.new(0,3.2,0)
     bb.AlwaysOnTop=true; bb.Enabled=ESP.ShowNames; bb.Adornee=head; bb.Parent=head
     local bbBG=Instance.new("Frame"); bbBG.Size=UDim2.new(1,0,1,0)
     bbBG.BackgroundColor3=Color3.fromRGB(10,10,20); bbBG.BackgroundTransparency=0.35
     bbBG.BorderSizePixel=0; bbBG.Parent=bb
-    Instance.new("UICorner",bbBG).CornerRadius=UDim.new(0,8)
-    local nameLbl=Instance.new("TextLabel"); nameLbl.Size=UDim2.new(1,-8,0,18)
+    Instance.new("UICorner",bbBG).CornerRadius=UDim.new(0,6)
+    local nameLbl=Instance.new("TextLabel"); nameLbl.Size=UDim2.new(1,-8,0,15)
     nameLbl.Position=UDim2.new(0,4,0,2); nameLbl.BackgroundTransparency=1
     nameLbl.Text=player.DisplayName; nameLbl.TextColor3=WHITE; nameLbl.TextScaled=true
     nameLbl.Font=Enum.Font.GothamBold; nameLbl.TextStrokeTransparency=0.4; nameLbl.Parent=bbBG
-    local distLbl=Instance.new("TextLabel"); distLbl.Size=UDim2.new(1,-8,0,14)
-    distLbl.Position=UDim2.new(0,4,0,20); distLbl.BackgroundTransparency=1; distLbl.Text=""
+    local distLbl=Instance.new("TextLabel"); distLbl.Size=UDim2.new(1,-8,0,12)
+    distLbl.Position=UDim2.new(0,4,0,17); distLbl.BackgroundTransparency=1; distLbl.Text=""
     distLbl.TextColor3=Color3.fromRGB(160,200,255); distLbl.TextScaled=true
     distLbl.Font=Enum.Font.Gotham; distLbl.Parent=bbBG
-    local hbBG=Instance.new("Frame"); hbBG.Size=UDim2.new(1,-8,0,5)
-    hbBG.Position=UDim2.new(0,4,0,36); hbBG.BackgroundColor3=Color3.fromRGB(30,30,30)
+    local hbBG=Instance.new("Frame"); hbBG.Size=UDim2.new(1,-8,0,3)
+    hbBG.Position=UDim2.new(0,4,0,31); hbBG.BackgroundColor3=Color3.fromRGB(30,30,30)
     hbBG.BorderSizePixel=0; hbBG.Parent=bbBG
-    Instance.new("UICorner",hbBG).CornerRadius=UDim.new(0,3)
+    Instance.new("UICorner",hbBG).CornerRadius=UDim.new(0,2)
     local hbFill=Instance.new("Frame"); hbFill.Size=UDim2.new(1,0,1,0)
     hbFill.BackgroundColor3=Color3.fromRGB(60,220,80); hbFill.BorderSizePixel=0; hbFill.Parent=hbBG
-    Instance.new("UICorner",hbFill).CornerRadius=UDim.new(0,3)
+    Instance.new("UICorner",hbFill).CornerRadius=UDim.new(0,2)
 
     -- Traceline
     local tl=newLine(1,ESP.TraceColor)
@@ -471,57 +471,6 @@ pcall(function()
             end
         end
         return orig(self,key)
-    end)
-end)
-
--- ── Magic Bullet ────────────────────────────────────────
--- Target part and mouse pos are cached OUTSIDE the hook via Heartbeat
--- so the hook itself makes zero namecalls (no recursion risk).
--- self.ClassName is a property (__index), not a namecall — safe inside hook.
-pcall(function()
-    if not hookmetamethod or not getnamecallmethod then return end
-
-    local mbPart     = nil
-    local mbMousePos = Vector2.new(0,0)
-
-    RunService.Heartbeat:Connect(function()
-        if not MB.Enabled then mbPart=nil; return end
-        local tgt=currentTarget; if not tgt then mbPart=nil; return end
-        local char=tgt.Character; if not char then mbPart=nil; return end
-        mbPart=char:FindFirstChild(AB.TargetPart)
-        pcall(function() mbMousePos=UserInputService:GetMouseLocation() end)
-    end)
-
-    local orig; orig=hookmetamethod(game,"__namecall",function(self,...)
-        -- fast-exit: no allocations until we know we need to act
-        if not MB.Enabled            then return orig(self,...) end
-        if checkcaller()             then return orig(self,...) end
-        if getnamecallmethod()~="FireServer" then return orig(self,...) end
-        -- ClassName via __index: no namecall, no recursion
-        local cls; pcall(function() cls=self.ClassName end)
-        if cls~="RemoteEvent"        then return orig(self,...) end
-        local part=mbPart;  if not part  then return orig(self,...) end
-        local ok,ray=pcall(Camera.ScreenPointToRay,Camera,mbMousePos.X,mbMousePos.Y)
-        if not ok                    then return orig(self,...) end
-        -- only allocate args table once we're actually replacing something
-        local args={...}
-        local replaced=false
-        for i,arg in ipairs(args) do
-            local pos
-            if typeof(arg)=="Vector3" then pos=arg
-            elseif typeof(arg)=="CFrame" then pos=arg.Position end
-            if pos then
-                local toArg=pos-ray.Origin
-                local along=toArg:Dot(ray.Direction)
-                if along>0 and (toArg-ray.Direction*along).Magnitude<=MB.MaxMissDist then
-                    if typeof(arg)=="Vector3" then args[i]=part.Position
-                    else args[i]=CFrame.new(part.Position,part.Position+arg.LookVector) end
-                    replaced=true
-                end
-            end
-        end
-        if replaced then return orig(self,table.unpack(args)) end
-        return orig(self,...)
     end)
 end)
 
@@ -710,7 +659,7 @@ RunService:BindToRenderStep("SkullzzAB",Enum.RenderPriority.Last.Value,function(
     end
 
     if currentTarget~=prevAimbotTarget then
-        camSpringVel=Vector3.new(0,0,0); targetPrevPos=nil; prevTargetScreenP=nil
+        targetPrevPos=nil; prevTargetScreenP=nil
         prevAimbotTarget=currentTarget
     end
 
@@ -732,16 +681,10 @@ RunService:BindToRenderStep("SkullzzAB",Enum.RenderPriority.Last.Value,function(
                 aimPos=aimPos+vel*(AB.Prediction/60)
             end
             targetPrevPos=part.Position
-            local stiffness=(AB.Smoothness^0.6)*380+6
-            local damping=AB.Damping*2*math.sqrt(stiffness)
-            local currentLV=Camera.CFrame.LookVector
-            local targetLV=(aimPos-Camera.CFrame.Position).Unit
-            local err=targetLV-currentLV
-            camSpringVel=camSpringVel+(err*stiffness-camSpringVel*damping)*dt
-            local newLV=currentLV+camSpringVel*dt
-            if newLV.Magnitude>0 then newLV=newLV.Unit end
-            if (newLV-targetLV).Magnitude<0.0008 then newLV=targetLV; camSpringVel=Vector3.new(0,0,0) end
-            Camera.CFrame=CFrame.new(Camera.CFrame.Position,Camera.CFrame.Position+newLV)
+            -- Lerp: frame-rate independent, no oscillation
+            local alpha=math.clamp(1-AB.Smoothness^(dt*60), 0.02, 1)
+            local targetCF=CFrame.new(Camera.CFrame.Position, aimPos)
+            Camera.CFrame=Camera.CFrame:Lerp(targetCF, alpha)
             -- Hit chance
             local toDist=(part.Position-(LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and LP.Character.HumanoidRootPart.Position or part.Position)).Magnitude
             local dF=math.clamp(1-toDist/600,0,1)
@@ -866,7 +809,6 @@ RunService.Heartbeat:Connect(function(dt)
         if statsEnabled then
             StatsLbl.Text="AB:"..(AB.Enabled and "ON" or "off")
                 .."  SA:"..(SA.Enabled and "ON" or "off")
-                .."  MB:"..(MB.Enabled and "ON" or "off")
                 .."  ESP:"..(ESP.Enabled and "ON" or "off")
         end
         -- Hitbox expand
@@ -1571,15 +1513,14 @@ do
 end
 
 makeModCard(CombatPage,"Aimbot",AB,"Enabled",function(v) AB.Enabled=v; updateFOV() end,
-    "Locks onto the nearest enemy within your FOV using a spring-damper for smooth, natural movement. Right-click a target with CursorLock to stick to them.",
+    "Locks onto the nearest enemy within your FOV. Smoothness: 0=instant snap, 0.98=very slow follow. Pair with Prediction for moving targets.",
     function(sf)
         makeSlider(sf,"FOV",50,600,AB.FOV,5,"%.0f px",function(v)
             AB.FOV=v; updateFOV()
             TargetLabel.Position=UDim2.new(0.5,0,0.5,-v-8)
             HitLabel.Position=UDim2.new(0.5,0,0.5,v+10)
         end)
-        makeSlider(sf,"Smoothness",0.01,1.0,AB.Smoothness,0.01,"%.2f",function(v) AB.Smoothness=v end)
-        makeSlider(sf,"Damping",0.4,2.0,AB.Damping,0.05,"%.2f",function(v) AB.Damping=v end)
+        makeSlider(sf,"Smoothness",0,0.98,AB.Smoothness,0.01,"%.2f",function(v) AB.Smoothness=v end)
         makeSlider(sf,"Prediction",0,8,AB.Prediction,1,"%.0f fr",function(v) AB.Prediction=v end)
         makeToggle(sf,"Auto Prediction",AB.AutoPrediction,function(v) AB.AutoPrediction=v end)
         makeToggle(sf,"Hold to Aim (RMB)",AB.HoldToAim,function(v) AB.HoldToAim=v end)
@@ -1594,12 +1535,6 @@ makeModCard(CombatPage,"Aimbot",AB,"Enabled",function(v) AB.Enabled=v; updateFOV
 
 makeModCard(CombatPage,"Silent Aim",SA,"Enabled",function(v) SA.Enabled=v end,
     "Overrides Mouse.Hit and Mouse.Target so your weapon detects the enemy even if your crosshair is off them. Works with most games that read mouse position.")
-
-makeModCard(CombatPage,"Magic Bullet",MB,"Enabled",function(v) MB.Enabled=v end,
-    "Hooks FireServer and replaces near-miss Vector3/CFrame args with the target's actual position. Uses perpendicular ray distance — fire roughly toward them and it corrects the hit.",
-    function(sf)
-        makeSlider(sf,"Miss Radius",5,200,MB.MaxMissDist,5,"%.0f st",function(v) MB.MaxMissDist=v end)
-    end)
 
 makeModCard(CombatPage,"Auto Shoot",MISC,"AutoShoot",function(v) MISC.AutoShoot=v end,
     "Automatically clicks when the aimbot has a locked target. Requires Aimbot to be enabled. Pair with a low fire rate for burst control.",
@@ -2733,7 +2668,7 @@ xpcall(_hub, function(e)
     warn("[SkullzzHub] RUNTIME ERROR: "..tostring(e))
     pcall(function()
         local sg=Instance.new("ScreenGui"); sg.IgnoreGuiInset=true; sg.ResetOnSpawn=false
-        pcall(function() sg.Parent=gethui() end)
+        pcall(function() sg.Parent=gethui()                                                                                                      end)
         if not sg.Parent then pcall(function() sg.Parent=game:GetService("CoreGui") end) end
         if not sg.Parent then pcall(function() sg.Parent=game.Players.LocalPlayer.PlayerGui end) end
         local f=Instance.new("Frame"); f.Size=UDim2.new(0,520,0,120)
