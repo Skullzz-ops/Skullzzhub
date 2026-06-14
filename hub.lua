@@ -2730,6 +2730,130 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         if upgradeTask then task.cancel(upgradeTask); upgradeTask=nil end
     end)
 
+    -- ── Auto Buy ────────────────────────────────────────
+    local AUTOBUY={Enabled=false, Delay=0.8}
+    local buyTask=nil
+
+    local function parseMoney(str)
+        if not str then return nil end
+        local n=tostring(str):gsub(",",""):match("([%d%.]+)")
+        return n and tonumber(n) or nil
+    end
+
+    local function getCash()
+        -- try leaderstats
+        local ls=LP:FindFirstChild("leaderstats")
+        if ls then
+            for _,v in ipairs(ls:GetChildren()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("NumberValue") then
+                    local nm=v.Name:lower()
+                    if nm:find("cash") or nm:find("money") or nm:find("coin") or nm:find("lemon") or nm:find("dollar") or nm:find("balance") then
+                        return v.Value
+                    end
+                end
+            end
+        end
+        -- try player attributes
+        for _,nm in ipairs({"Cash","Money","Coins","Dollars","Lemons","Balance","currency"}) do
+            local ok,val=pcall(function() return LP:GetAttribute(nm) end)
+            if ok and type(val)=="number" then return val end
+        end
+        return math.huge -- can't find cash; let server validate
+    end
+
+    local function getButtonPrice(btn)
+        -- 1. NumberValue/IntValue child named Price/Cost
+        for _,c in ipairs(btn:GetChildren()) do
+            if c:IsA("NumberValue") or c:IsA("IntValue") then
+                local nm=c.Name:lower()
+                if nm:find("price") or nm:find("cost") or nm:find("value") or nm:find("amount") then
+                    return c.Value
+                end
+            end
+        end
+        -- 2. Attribute on the button
+        for _,nm in ipairs({"Price","Cost","Value","Amount"}) do
+            local ok,val=pcall(function() return btn:GetAttribute(nm) end)
+            if ok and type(val)=="number" and val>0 then return val end
+        end
+        -- 3. Parse $ from a TextLabel inside Billboard
+        local bb=btn:FindFirstChild("Billboard")
+        if bb then
+            for _,c in ipairs(bb:GetDescendants()) do
+                if c:IsA("TextLabel") then
+                    local t=c.Text or ""
+                    if t:find("%$") then
+                        local v=parseMoney(t)
+                        if v and v>0 then return v end
+                    end
+                end
+            end
+        end
+        return 0 -- price unknown; will attempt anyway
+    end
+
+    local function scanButtons(tycoon)
+        local result={}
+        local purch=tycoon:FindFirstChild("Purchases"); if not purch then return result end
+        for _,cat in ipairs(purch:GetChildren()) do
+            local btnsF=cat:FindFirstChild("Buttons")
+            if btnsF then
+                for _,btn in ipairs(btnsF:GetChildren()) do
+                    local bb=btn:FindFirstChild("Billboard")
+                    local remote=bb and bb:FindFirstChild("Purchase")
+                    if remote then
+                        table.insert(result,{
+                            remote=remote,
+                            price=getButtonPrice(btn),
+                            name=btn.Name,
+                            cat=cat.Name,
+                        })
+                    end
+                end
+            end
+        end
+        return result
+    end
+
+    local function doBuyOne()
+        local t=findTycoon()
+        if not t then
+            if notify then notify("AutoBuy: tycoon not found") end; return false
+        end
+        local cash=getCash()
+        local buttons=scanButtons(t)
+        if #buttons==0 then return false end
+        table.sort(buttons,function(a,b) return a.price<b.price end)
+        for _,b in ipairs(buttons) do
+            if b.price==0 or b.price<=cash then
+                local ok=pcall(function() b.remote:InvokeServer(false) end)
+                if ok then
+                    if notify then notify("Bought: "..b.name) end
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function setAutoBuy(v)
+        AUTOBUY.Enabled=v
+        if buyTask then task.cancel(buyTask); buyTask=nil end
+        if v then
+            buyTask=task.spawn(function()
+                while AUTOBUY.Enabled do
+                    doBuyOne()
+                    task.wait(AUTOBUY.Delay)
+                end
+            end)
+        end
+    end
+
+    table.insert(cleanupHooks,function()
+        AUTOBUY.Enabled=false
+        if buyTask then task.cancel(buyTask); buyTask=nil end
+    end)
+
     -- ── UI ──────────────────────────────────────────────
     makeDivider(LemonsPage,"AUTO UPGRADE")
 
@@ -2776,6 +2900,17 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
             selUpgrade=itemName; updateSelUI()
         end)
     end
+
+    makeDivider(LemonsPage,"AUTO BUY")
+    makeModCard(LemonsPage,"Auto Buy",AUTOBUY,"Enabled",
+        function(v) setAutoBuy(v) end,
+        "Scans your tycoon for all purchase buttons, finds the cheapest you can afford, and buys it on repeat.",
+        function(sf)
+            makeSlider(sf,"Delay",0.1,5,AUTOBUY.Delay,0.1,"%.1f s",
+                function(v) AUTOBUY.Delay=v end)
+            makeButton(sf,"Buy Once",function() doBuyOne() end)
+        end
+    )
 
 end -- LEMONS do..end
 
