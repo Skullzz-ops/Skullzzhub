@@ -81,6 +81,8 @@ local currentTarget = nil
 local ESPObjects    = {}
 local flyBV, flyBG  = nil, nil
 local camSpringVel  = Vector3.new(0,0,0)
+local origCamType    = Camera.CameraType
+local sharedPlayers  = {}   -- updated in Heartbeat, shared with getClosestTarget
 local targetPrevPos, prevAimbotTarget, prevTargetScreenP = nil,nil,nil
 local targetScreenVelMag, hitChancePct = 0, 0
 local cycledTarget, cycleExpiry = nil, 0
@@ -546,6 +548,7 @@ cleanupAll=function()
     for _,p in ipairs(tbl) do RemoveESP(p) end
     Lighting.Brightness=origLight.B; Lighting.Ambient=origLight.A; Lighting.FogEnd=origLight.FE
     Camera.FieldOfView=70; RadarFrame.Visible=false; SpecLabel.Visible=false
+    pcall(function() Camera.CameraType=origCamType end)
     applyMovement()
 end
 
@@ -591,7 +594,7 @@ local function playerAlive(p)
 end
 local function getTargetList()
     local origin=getOrigin(); local out={}
-    for _,pl in ipairs(Players:GetPlayers()) do
+    for _,pl in ipairs(sharedPlayers) do
         repeat
             if pl==LP then break end
             if AB.TeamCheck and pl.Team==LP.Team then break end
@@ -621,7 +624,7 @@ local function getClosestTarget()
         cycledTarget=nil
     end
     local origin=getOrigin(); local bestDist=AB.FOV; local best=nil
-    for _,pl in ipairs(Players:GetPlayers()) do
+    for _,pl in ipairs(sharedPlayers) do
         repeat
             if pl==LP then break end
             if AB.TeamCheck and pl.Team==LP.Team then break end
@@ -681,10 +684,18 @@ RunService:BindToRenderStep("SkullzzAB",Enum.RenderPriority.Last.Value,function(
                 aimPos=aimPos+vel*(AB.Prediction/60)
             end
             targetPrevPos=part.Position
-            -- Lerp: frame-rate independent, no oscillation
+            -- Take camera control so Roblox's camera script can't fight us
+            if Camera.CameraType~=Enum.CameraType.Scriptable then
+                Camera.CameraType=Enum.CameraType.Scriptable
+            end
+            -- LookVector lerp: only rotates toward target, no position/roll drift
             local alpha=math.clamp(1-AB.Smoothness^(dt*60), 0.02, 1)
-            local targetCF=CFrame.new(Camera.CFrame.Position, aimPos)
-            Camera.CFrame=Camera.CFrame:Lerp(targetCF, alpha)
+            local cf=Camera.CFrame
+            local targetLV=(aimPos-cf.Position).Unit
+            local newLV=cf.LookVector:Lerp(targetLV, alpha)
+            if newLV.Magnitude>0 then
+                Camera.CFrame=CFrame.new(cf.Position, cf.Position+newLV.Unit)
+            end
             -- Hit chance
             local toDist=(part.Position-(LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and LP.Character.HumanoidRootPart.Position or part.Position)).Magnitude
             local dF=math.clamp(1-toDist/600,0,1)
@@ -705,7 +716,10 @@ RunService:BindToRenderStep("SkullzzAB",Enum.RenderPriority.Last.Value,function(
             else HitLabel.Visible=false end
         end
     else
-        camSpringVel=camSpringVel*math.max(0,1-10*dt)
+        -- Restore normal camera when not locked
+        if Camera.CameraType==Enum.CameraType.Scriptable then
+            Camera.CameraType=origCamType
+        end
         TargetLabel.Visible=false; HitLabel.Visible=false; hitChancePct=0
     end
 
@@ -740,8 +754,8 @@ RunService.Heartbeat:Connect(function(dt)
     -- cache the player list ONCE per frame, and only when a feature needs it
     -- (avoids 4 separate GetPlayers() table allocations every frame)
     local players
-    if MISC.TriggerBot or MISC.HitboxExpand or RADAR.Enabled or ESP.Enabled then
-        players=Players:GetPlayers()
+    if MISC.TriggerBot or MISC.HitboxExpand or RADAR.Enabled or ESP.Enabled or AB.Enabled then
+        players=Players:GetPlayers(); sharedPlayers=players
     end
 
     -- ── Always: auto-shoot / triggerbot / godmode / noclip
