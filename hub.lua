@@ -474,44 +474,52 @@ pcall(function()
     end)
 end)
 
--- ── Magic Bullet (FIXED) ───────────────────────────────
--- FIX: entire inner block wrapped in pcall so ANY error never
--- drops the FireServer call. Uses perpendicular ray-distance
--- check instead of a fixed 500-stud point comparison.
+-- ── Magic Bullet ────────────────────────────────────────
+-- Target part and mouse pos are cached OUTSIDE the hook via Heartbeat
+-- so the hook itself makes zero namecalls (no recursion risk).
+-- self.ClassName is a property (__index), not a namecall — safe inside hook.
 pcall(function()
-    if not hookmetamethod then return end
+    if not hookmetamethod or not getnamecallmethod then return end
+
+    local mbPart     = nil
+    local mbMousePos = Vector2.new(0,0)
+
+    RunService.Heartbeat:Connect(function()
+        if not MB.Enabled then mbPart=nil; return end
+        local tgt=currentTarget; if not tgt then mbPart=nil; return end
+        local char=tgt.Character; if not char then mbPart=nil; return end
+        mbPart=char:FindFirstChild(AB.TargetPart)
+        pcall(function() mbMousePos=UserInputService:GetMouseLocation() end)
+    end)
+
     local orig; orig=hookmetamethod(game,"__namecall",function(self,...)
+        -- fast-exit: no allocations until we know we need to act
+        if not MB.Enabled            then return orig(self,...) end
+        if checkcaller()             then return orig(self,...) end
+        if getnamecallmethod()~="FireServer" then return orig(self,...) end
+        -- ClassName via __index: no namecall, no recursion
+        local cls; pcall(function() cls=self.ClassName end)
+        if cls~="RemoteEvent"        then return orig(self,...) end
+        local part=mbPart;  if not part  then return orig(self,...) end
+        local ok,ray=pcall(Camera.ScreenPointToRay,Camera,mbMousePos.X,mbMousePos.Y)
+        if not ok                    then return orig(self,...) end
+        -- only allocate args table once we're actually replacing something
         local args={...}
         local replaced=false
-        pcall(function()
-            if not MB.Enabled or checkcaller() then return end
-            if getnamecallmethod()~="FireServer" then return end
-            local isRE; pcall(function() isRE=self:IsA("RemoteEvent") end)
-            if not isRE then return end
-            if not currentTarget then return end
-            local char=currentTarget.Character
-            local part=char and char:FindFirstChild(AB.TargetPart); if not part then return end
-            -- perpendicular distance from arg to camera look ray
-            local mpos=UserInputService:GetMouseLocation()
-            local ok2,ray=pcall(Camera.ScreenPointToRay,Camera,mpos.X,mpos.Y); if not ok2 then return end
-            for i,arg in ipairs(args) do
-                local pos
-                if typeof(arg)=="Vector3" then pos=arg
-                elseif typeof(arg)=="CFrame" then pos=arg.Position end
-                if pos then
-                    local toArg=pos-ray.Origin
-                    local along=toArg:Dot(ray.Direction)
-                    if along>0 then
-                        local perp=(toArg-ray.Direction*along).Magnitude
-                        if perp<=MB.MaxMissDist then
-                            if typeof(arg)=="Vector3" then args[i]=part.Position
-                            else args[i]=CFrame.new(part.Position,part.Position+arg.LookVector) end
-                            replaced=true
-                        end
-                    end
+        for i,arg in ipairs(args) do
+            local pos
+            if typeof(arg)=="Vector3" then pos=arg
+            elseif typeof(arg)=="CFrame" then pos=arg.Position end
+            if pos then
+                local toArg=pos-ray.Origin
+                local along=toArg:Dot(ray.Direction)
+                if along>0 and (toArg-ray.Direction*along).Magnitude<=MB.MaxMissDist then
+                    if typeof(arg)=="Vector3" then args[i]=part.Position
+                    else args[i]=CFrame.new(part.Position,part.Position+arg.LookVector) end
+                    replaced=true
                 end
             end
-        end)
+        end
         if replaced then return orig(self,table.unpack(args)) end
         return orig(self,...)
     end)
