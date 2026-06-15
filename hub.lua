@@ -29,7 +29,7 @@ local SKULL_IMG = "rbxassetid://135094534201893"  -- TODO: replace 0 with your u
 
 -- ── Settings ───────────────────────────────────────────
 local AB = {
-    Enabled=true, FOV=200, Smoothness=0.7, Damping=1.0,
+    Enabled=false, FOV=200, Smoothness=0.7, Damping=1.0,
     Prediction=2, AutoPrediction=false, TargetPart="Head",
     ShowFOVCircle=true, CircleColor=WHITE, CircleThickness=2,
     ShowTargetName=true, ShowHitChance=true,
@@ -47,7 +47,7 @@ local MISC = {
     SpeedEnabled=false, Speed=100,
     JumpEnabled=false, JumpPower=150,
     InfiniteJump=false, NoClip=false,
-    Fly=false, FlySpeed=60, AntiAFK=true,
+    Fly=false, FlySpeed=60, AntiAFK=false,
     GodMode=false, AntiRagdoll=false,
     AutoShoot=false, AutoShootRate=0.1,
     TriggerBot=false, TriggerFOV=30,
@@ -2868,7 +2868,7 @@ local function _setupLemons() -- own function = own 200-register space
         end
     end
 
-    local function doBuyOne()
+    local function doBuyOne(silent)
         local t=findTycoon()
         if not t then
             if notify then notify("AutoBuy: tycoon not found") end; return false
@@ -2916,7 +2916,7 @@ local function _setupLemons() -- own function = own 200-register space
                 end
             end
         end
-        if bought==0 and notify then
+        if bought==0 and not silent and notify then
             if realErr then
                 local short=realErr:match(": (.+)$") or realErr
                 notify("AutoBuy ERR: "..short:sub(1,70))
@@ -2931,11 +2931,11 @@ local function _setupLemons() -- own function = own 200-register space
         AUTOBUY.Enabled=v
         if buyTask then task.cancel(buyTask); buyTask=nil end
         if v then
-            doBuyOne()
+            doBuyOne(true)
             buyTask=task.spawn(function()
                 while AUTOBUY.Enabled do
                     task.wait(AUTOBUY.Delay)
-                    doBuyOne()
+                    doBuyOne(true) -- silent: only notify when something is actually bought
                 end
             end)
         end
@@ -3140,7 +3140,7 @@ local function _setupLemons() -- own function = own 200-register space
         function(sf)
             makeSlider(sf,"Delay",0.3,5,AUTOBUY.Delay,0.1,"%.1f s",
                 function(v) AUTOBUY.Delay=v end)
-            makeButton(sf,"Buy Once",function() doBuyOne() end)
+            makeButton(sf,"Buy Once",function() doBuyOne(false) end)
             makeButton(sf,"Scan Debug",function() scanDebug() end)
         end
     )
