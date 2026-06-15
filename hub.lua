@@ -3137,10 +3137,9 @@ _setupLemons()
 local function _setupFTW()
     makeDivider(FTWPage,"FINISH THE WORD")
 
-    local FTW        = {Delay=0.08}
-    local detectedLabel = nil
-    local FTW_SOLVING   = false
-    local ftwAutoTask   = nil
+    local FTW         = {Delay=0.12}
+    local FTW_SOLVING = false
+    local ftwAutoTask = nil
 
     local function getFTWRemote()
         local ok,r=pcall(function()
@@ -3149,84 +3148,120 @@ local function _setupFTW()
         return ok and r or nil
     end
 
+    -- ScreenGui named "ScreenGui" under PlayerGui — only present during an active round
+    local function getFTWSG()
+        return LP.PlayerGui:FindFirstChild("ScreenGui")
+    end
+
+    -- Read the 4 letter choice buttons  (ChoiceList."1".Key.Inner.TextLabel … "4")
+    local function getChoices()
+        local sg=getFTWSG(); if not sg then return {} end
+        local cl=sg:FindFirstChild("ChoiceList"); if not cl then return {} end
+        local out={}
+        for i=1,4 do
+            local ok,ch=pcall(function()
+                return cl:FindFirstChild(tostring(i)).Key.Inner.TextLabel.Text:upper()
+            end)
+            if ok and ch and ch:match("[A-Z]") then table.insert(out,ch) end
+        end
+        return out
+    end
+
+    -- Read what's been typed so far (TopBar.AnswerInput.Keys.N.Inner.TextLabel)
+    local function getCurrentInput()
+        local sg=getFTWSG(); if not sg then return "" end
+        local keys
+        local ok=pcall(function() keys=sg.TopBar.AnswerInput.Keys end)
+        if not ok or not keys then return "" end
+        local s=""
+        for i=1,20 do
+            local sl=keys:FindFirstChild(tostring(i)); if not sl then break end
+            local ok2,ch=pcall(function() return sl.Inner.TextLabel.Text end)
+            if ok2 and ch and ch~="" then s=s..ch end
+        end
+        return s:upper()
+    end
+
+    -- Read the question label
+    local function getQuestion()
+        local sg=getFTWSG(); if not sg then return nil end
+        local ok,t=pcall(function() return sg.TopBar.Question.QuestionLabel.Text end)
+        return ok and t or nil
+    end
+
     local function ftwKey(letter)
         local r=getFTWRemote(); if not r then return end
         pcall(function() r:InvokeServer("keyStroke",letter) end)
     end
 
-    local function ftwSubmit()
+    -- Returns the server result (true = correct word, false/nil = wrong)
+    local function ftwTryAnswer()
+        local r=getFTWRemote(); if not r then return nil end
+        local ok,res=pcall(function() return r:InvokeServer("tryAnswer") end)
+        return ok and res or nil
+    end
+
+    local function ftwBackspace()
         local r=getFTWRemote(); if not r then return end
-        pcall(function() r:InvokeServer("tryAnswer") end)
+        pcall(function() r:InvokeServer("keyStroke","Backspace") end)
     end
 
-    -- Detect what blank character the game uses, then return the word label
-    local BLANK_CHAR = "_"  -- updated by scanner if needed
-    local function findWordLabel()
-        local blanks = {"_","%-","%.","#","%-%-"}
-        for _,bl in ipairs(blanks) do
-            for _,d in ipairs(LP.PlayerGui:GetDescendants()) do
-                if d:IsA("TextLabel") and d.Visible then
-                    local t=d.Text:upper():gsub("%s","")
-                    local pat="^[A-Z"..bl.."]+$"
-                    if #t>=2 and t:find("[A-Z]") and t:find(bl) and t:match(pat) then
-                        BLANK_CHAR=bl; return d,t
-                    end
-                end
-            end
+    -- Type a sequence of letters, submit, backspace them if wrong
+    local function tryLetters(letters)
+        for _,ch in ipairs(letters) do ftwKey(ch); task.wait(FTW.Delay) end
+        local res=ftwTryAnswer()
+        if not res then
+            task.wait(0.08)
+            -- backspace what we typed (game may reset automatically; pcall is safe either way)
+            for _=1,#letters do ftwBackspace(); task.wait(0.05) end
         end
-        return nil,nil
+        return res
     end
 
-    -- Debug: dump all non-empty TextLabels to F9 so we can see the word display format
-    local function debugScanAllLabels()
-        local found={}
-        for _,d in ipairs(LP.PlayerGui:GetDescendants()) do
-            if d:IsA("TextLabel") and d.Text~="" and d.Text~=" " then
-                table.insert(found,{text=d.Text, path=d:GetFullName(), vis=d.Visible})
-            end
-        end
-        warn("[FTW SCAN] Found "..#found.." TextLabels in PlayerGui:")
-        for i,v in ipairs(found) do
-            warn(string.format("  [%d] vis=%s text=%q  @ %s",i,tostring(v.vis),v.text,v.path))
-        end
-        return found
-    end
-
-    -- Try A-Z for each blank and watch the label to see if the letter was accepted
+    -- Try all permutations of the 4 choices (1→2→3→4 letters deep)
     local function autoSolve(silent)
         if FTW_SOLVING then return end
         FTW_SOLVING=true
-        local label=detectedLabel
-        if not label or not label.Parent then
-            label=findWordLabel(); detectedLabel=label
-        end
-        if not label then
-            if not silent then notify("FTW: no word label found — use Scan Word first") end
+        local sg=getFTWSG()
+        if not sg then
+            if not silent then notify("FTW: join a round first") end
             FTW_SOLVING=false; return
         end
-        local ALPHA="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        local safety=0
-        while safety<60 do
-            safety=safety+1
-            local cur=label.Text:upper():gsub("%s","")
-            local bp=cur:find(BLANK_CHAR)
-            if not bp then
-                ftwSubmit()
-                if not silent then notify("FTW: all blanks filled — submitted!") end
-                break
-            end
-            local found=false
-            for i=1,#ALPHA do
-                local ch=ALPHA:sub(i,i)
-                ftwKey(ch); task.wait(FTW.Delay)
-                local after=label.Text:upper():gsub("%s","")
-                if after:sub(bp,bp)~=BLANK_CHAR:sub(1,1) then found=true; break end
-            end
-            if not found then
-                if not silent then notify("FTW: stuck at blank pos "..bp) end
-                break
-            end
+        local c=getChoices()
+        if #c==0 then
+            if not silent then notify("FTW: no choice buttons found") end
+            FTW_SOLVING=false; return
         end
+        if not silent then notify("FTW: trying… choices="..table.concat(c,"")) end
+
+        -- 1 letter
+        for _,a in ipairs(c) do
+            if tryLetters({a}) then if not silent then notify("FTW: solved!") end FTW_SOLVING=false; return end
+            task.wait(0.08)
+        end
+        -- 2 letters (no repeat)
+        for _,a in ipairs(c) do for _,b in ipairs(c) do
+            if a~=b then
+                if tryLetters({a,b}) then if not silent then notify("FTW: solved!") end FTW_SOLVING=false; return end
+                task.wait(0.08)
+            end
+        end end
+        -- 3 letters
+        for _,a in ipairs(c) do for _,b in ipairs(c) do for _,cc in ipairs(c) do
+            if a~=b and a~=cc and b~=cc then
+                if tryLetters({a,b,cc}) then if not silent then notify("FTW: solved!") end FTW_SOLVING=false; return end
+                task.wait(0.08)
+            end
+        end end end
+        -- 4 letters
+        for _,a in ipairs(c) do for _,b in ipairs(c) do for _,cc in ipairs(c) do for _,d in ipairs(c) do
+            if a~=b and a~=cc and a~=d and b~=cc and b~=d and cc~=d then
+                if tryLetters({a,b,cc,d}) then if not silent then notify("FTW: solved!") end FTW_SOLVING=false; return end
+                task.wait(0.08)
+            end
+        end end end end
+
+        if not silent then notify("FTW: no valid combo found") end
         FTW_SOLVING=false
     end
 
@@ -3236,7 +3271,7 @@ local function _setupFTW()
         if ftwAutoTask then task.cancel(ftwAutoTask); ftwAutoTask=nil end
         if v then
             ftwAutoTask=task.spawn(function()
-                while FTW_AUTO.Enabled do autoSolve(true); task.wait(1.5) end
+                while FTW_AUTO.Enabled do autoSolve(true); task.wait(2) end
             end)
         end
     end
@@ -3244,34 +3279,25 @@ local function _setupFTW()
 
     makeModCard(FTWPage,"Auto Answer",FTW_AUTO,"Enabled",
         function(v) setFTWAuto(v) end,
-        "Tries A-Z for each blank and watches the word label to see if the letter was accepted. Run Scan Word first if it can't find the label automatically.",
+        "Reads the 4 letter buttons and tries every 1-4 letter permutation until tryAnswer accepts. Join a round first.",
         function(sf)
-            makeSlider(sf,"Letter Delay",0.03,0.3,FTW.Delay,0.01,"%.2f s",
+            makeSlider(sf,"Letter Delay",0.05,0.5,FTW.Delay,0.01,"%.2f s",
                 function(v) FTW.Delay=v end)
-            makeButton(sf,"Scan Word Label",function()
-                local lbl,txt=findWordLabel()
-                if lbl then
-                    detectedLabel=lbl
-                    notify("FTW: found \""..txt.."\" @ "..lbl:GetFullName())
-                else
-                    -- fall back to debug dump — check F9 for all labels
-                    local all=debugScanAllLabels()
-                    notify("FTW: no match ("..#all.." labels total) — check F9 for list")
-                end
-            end)
-            makeButton(sf,"Debug: Dump All Labels (F9)",function()
-                local all=debugScanAllLabels()
-                notify("FTW: dumped "..#all.." labels to F9")
-            end)
             makeButton(sf,"Solve Once",function()
                 task.spawn(function() autoSolve(false) end)
+            end)
+            makeButton(sf,"Read Choices (debug)",function()
+                local q=getQuestion()
+                local ch=getChoices()
+                local cur=getCurrentInput()
+                if q then notify("Q: "..q) end
+                notify("Input so far: \""..cur.."\"  |  Choices: "..table.concat(ch,", "))
             end)
         end
     )
 
     makeDivider(FTWPage,"MANUAL TYPE")
 
-    -- TextBox card for manual word entry
     local manualWord=""
     local inputCard=Instance.new("Frame")
     inputCard.Size=UDim2.new(1,0,0,62)
@@ -3286,7 +3312,7 @@ local function _setupFTW()
     local ftwTB=Instance.new("TextBox")
     ftwTB.Size=UDim2.new(1,-12,0,28); ftwTB.Position=UDim2.new(0,6,0,28)
     ftwTB.BackgroundColor3=MID; ftwTB.BorderSizePixel=0
-    ftwTB.Text=""; ftwTB.PlaceholderText="type the answer here..."
+    ftwTB.Text=""; ftwTB.PlaceholderText="type word here..."
     ftwTB.TextColor3=WHITE; ftwTB.PlaceholderColor3=DIM
     ftwTB.TextSize=12; ftwTB.Font=Enum.Font.GothamBold
     ftwTB.ClearTextOnFocus=false; ftwTB.Parent=inputCard
@@ -3299,7 +3325,7 @@ local function _setupFTW()
                     local ch=manualWord:sub(i,i):upper()
                     if ch:match("[A-Z]") then ftwKey(ch); task.wait(FTW.Delay) end
                 end
-                task.wait(0.1); ftwSubmit()
+                task.wait(0.1); ftwTryAnswer()
             end)
         end
     end)
@@ -3312,11 +3338,10 @@ local function _setupFTW()
                 local ch=manualWord:sub(i,i):upper()
                 if ch:match("[A-Z]") then ftwKey(ch); task.wait(FTW.Delay) end
             end
-            task.wait(0.1); ftwSubmit()
+            task.wait(0.1); ftwTryAnswer()
         end)
     end)
-
-    makeButton(FTWPage,"Submit Answer",function() ftwSubmit() end)
+    makeButton(FTWPage,"Submit Answer",function() ftwTryAnswer() end)
 end
 _setupFTW()
 
