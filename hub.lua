@@ -3159,17 +3159,37 @@ local function _setupFTW()
         pcall(function() r:InvokeServer("tryAnswer") end)
     end
 
-    -- Scan PlayerGui for a TextLabel whose text contains letters + underscores (word with blanks)
+    -- Detect what blank character the game uses, then return the word label
+    local BLANK_CHAR = "_"  -- updated by scanner if needed
     local function findWordLabel()
-        for _,d in ipairs(LP.PlayerGui:GetDescendants()) do
-            if d:IsA("TextLabel") then
-                local t=d.Text:upper():gsub("%s","")
-                if #t>=2 and t:find("[A-Z]") and t:find("_") and t:match("^[A-Z_%-%.]+$") then
-                    return d,t
+        local blanks = {"_","%-","%.","#","%-%-"}
+        for _,bl in ipairs(blanks) do
+            for _,d in ipairs(LP.PlayerGui:GetDescendants()) do
+                if d:IsA("TextLabel") and d.Visible then
+                    local t=d.Text:upper():gsub("%s","")
+                    local pat="^[A-Z"..bl.."]+$"
+                    if #t>=2 and t:find("[A-Z]") and t:find(bl) and t:match(pat) then
+                        BLANK_CHAR=bl; return d,t
+                    end
                 end
             end
         end
         return nil,nil
+    end
+
+    -- Debug: dump all non-empty TextLabels to F9 so we can see the word display format
+    local function debugScanAllLabels()
+        local found={}
+        for _,d in ipairs(LP.PlayerGui:GetDescendants()) do
+            if d:IsA("TextLabel") and d.Text~="" and d.Text~=" " then
+                table.insert(found,{text=d.Text, path=d:GetFullName(), vis=d.Visible})
+            end
+        end
+        warn("[FTW SCAN] Found "..#found.." TextLabels in PlayerGui:")
+        for i,v in ipairs(found) do
+            warn(string.format("  [%d] vis=%s text=%q  @ %s",i,tostring(v.vis),v.text,v.path))
+        end
+        return found
     end
 
     -- Try A-Z for each blank and watch the label to see if the letter was accepted
@@ -3189,7 +3209,7 @@ local function _setupFTW()
         while safety<60 do
             safety=safety+1
             local cur=label.Text:upper():gsub("%s","")
-            local bp=cur:find("_")
+            local bp=cur:find(BLANK_CHAR)
             if not bp then
                 ftwSubmit()
                 if not silent then notify("FTW: all blanks filled — submitted!") end
@@ -3200,7 +3220,7 @@ local function _setupFTW()
                 local ch=ALPHA:sub(i,i)
                 ftwKey(ch); task.wait(FTW.Delay)
                 local after=label.Text:upper():gsub("%s","")
-                if after:sub(bp,bp)~="_" then found=true; break end
+                if after:sub(bp,bp)~=BLANK_CHAR:sub(1,1) then found=true; break end
             end
             if not found then
                 if not silent then notify("FTW: stuck at blank pos "..bp) end
@@ -3230,8 +3250,18 @@ local function _setupFTW()
                 function(v) FTW.Delay=v end)
             makeButton(sf,"Scan Word Label",function()
                 local lbl,txt=findWordLabel()
-                if lbl then detectedLabel=lbl; notify("FTW: found \""..txt.."\" @ "..lbl:GetFullName())
-                else notify("FTW: no word label found in PlayerGui") end
+                if lbl then
+                    detectedLabel=lbl
+                    notify("FTW: found \""..txt.."\" @ "..lbl:GetFullName())
+                else
+                    -- fall back to debug dump — check F9 for all labels
+                    local all=debugScanAllLabels()
+                    notify("FTW: no match ("..#all.." labels total) — check F9 for list")
+                end
+            end)
+            makeButton(sf,"Debug: Dump All Labels (F9)",function()
+                local all=debugScanAllLabels()
+                notify("FTW: dumped "..#all.." labels to F9")
             end)
             makeButton(sf,"Solve Once",function()
                 task.spawn(function() autoSolve(false) end)
