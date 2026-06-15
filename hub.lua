@@ -2860,21 +2860,21 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         end
         table.sort(buttons,function(a,b) return a.price<b.price end)
         local bought=0
-        local errors=0
+        local lastErr=nil
         for _,b in ipairs(buttons) do
             local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
             if not ok then
-                errors=errors+1
+                lastErr=tostring(res):sub(1,80)
             elseif res==true then
                 bought=bought+1
                 if notify then notify("Bought: "..b.name) end
             end
         end
         if bought==0 and notify then
-            if errors>0 then
-                notify("AutoBuy: "..errors.." error(s) — check F9")
+            if lastErr then
+                notify("AutoBuy ERR: "..lastErr)
             else
-                notify("AutoBuy: server rejected all "..#buttons.." button(s) (can't afford?)")
+                notify("AutoBuy: server rejected all "..#buttons.." (can't afford?)")
             end
         end
         return bought>0
