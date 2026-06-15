@@ -2942,27 +2942,49 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     local COLLECT={Enabled=false, Delay=0.5}
     local collectTask=nil
     local fruitEvent=nil
+    local cachedTrees={}
+    local treesCached=false
     pcall(function()
         fruitEvent=game:GetService("ReplicatedStorage").Core.RemoteSignal["ClickFruitService.Clicked"]
     end)
 
-    local function collectOnce()
-        local count=0
+    local function findTrees()
+        if treesCached then return end
+        cachedTrees={}
         for _,obj in ipairs(workspace:GetDescendants()) do
-            if obj.Name=="Fruit" and obj:IsA("BasePart") then
-                local cp=obj:FindFirstChild("ClickPart")
-                local det=cp and cp:FindFirstChild("ClickDetector")
-                if det then
-                    if fireclickdetector then
-                        pcall(fireclickdetector, det)
-                    elseif firesignal and fruitEvent then
-                        pcall(firesignal, fruitEvent.OnClientEvent, 0, obj.Position, false)
+            if obj.Name=="LemonTree" then
+                table.insert(cachedTrees, obj)
+            end
+        end
+        treesCached=true
+    end
+
+    local function collectOnce(silent)
+        findTrees()
+        local count=0
+        local staleTrees=false
+        for _,tree in ipairs(cachedTrees) do
+            if not tree.Parent then staleTrees=true end
+            if tree.Parent then
+                for _,child in ipairs(tree:GetChildren()) do
+                    if child.Name=="Fruit" and child:IsA("BasePart") then
+                        local cp=child:FindFirstChild("ClickPart")
+                        local det=cp and cp:FindFirstChild("ClickDetector")
+                        if det then
+                            if fireclickdetector then
+                                pcall(fireclickdetector, det)
+                            elseif firesignal and fruitEvent then
+                                pcall(firesignal, fruitEvent.OnClientEvent, 0, child.Position, false)
+                            end
+                            count=count+1
+                            task.wait() -- yield between each fruit to avoid frame spike
+                        end
                     end
-                    count=count+1
                 end
             end
         end
-        if notify and count>0 then notify("Collected "..count.." fruit(s)") end
+        if staleTrees then treesCached=false; cachedTrees={} end
+        if not silent and notify and count>0 then notify("Collected "..count.." fruit(s)") end
         return count
     end
 
@@ -2972,7 +2994,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         if v then
             collectTask=task.spawn(function()
                 while COLLECT.Enabled do
-                    collectOnce()
+                    collectOnce(true) -- silent on auto loop
                     task.wait(COLLECT.Delay)
                 end
             end)
@@ -3038,7 +3060,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         function(sf)
             makeSlider(sf,"Delay",0.1,5,COLLECT.Delay,0.1,"%.1f s",
                 function(v) COLLECT.Delay=v end)
-            makeButton(sf,"Collect Once",function() collectOnce() end)
+            makeButton(sf,"Collect Once",function() collectOnce(false) end)
         end
     )
 
