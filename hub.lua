@@ -2904,14 +2904,13 @@ local function _setupLemons() -- own function = own 200-register space
                 else
                     local err=tostring(res)
                     local low=err:lower()
-                    if low:find("already") or low:find("purchased") or low:find("owned")
-                       or low:find("not purchasable") or low:find("disabled") then
+                    if low:find("already") or low:find("purchased") or low:find("owned") then
                         skippedOwned=skippedOwned+1
-                        buyDenylist[path]=true -- never try this one again
+                        buyDenylist[path]=true -- permanent: item already bought, skip forever
                     else
-                        realErr=err
-                        warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..err)
-                        buyDenylist[path]=true -- also denylist unexpected errors
+                        -- "not purchasable", "disabled", other errors are TEMPORARY
+                        -- do NOT denylist — retry next cycle when conditions change
+                        skippedOwned=skippedOwned+1
                     end
                 end
             end
