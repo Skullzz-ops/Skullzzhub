@@ -1471,7 +1471,8 @@ local TrollPage       = makePage()
 local DropPage        = makePage()
 local GamesPage       = makePage()
 local LemonsPage      = makePage()
-local allPages={CombatPage,ESPPage,MovePage,ExtrasPage,ConfigPage,BillionairePage,TrollPage,DropPage,GamesPage,LemonsPage}
+local FTWPage         = makePage()
+local allPages={CombatPage,ESPPage,MovePage,ExtrasPage,ConfigPage,BillionairePage,TrollPage,DropPage,GamesPage,LemonsPage,FTWPage}
 
 -- ── Sidebar Buttons ────────────────────────────────────
 local CATS={
@@ -1485,6 +1486,7 @@ local CATS={
     {label="🔴 DROP",  page=DropPage},
     {label="🎮 GAMES", page=GamesPage},
     {label="🍋 LEMONS", page=LemonsPage},
+    {label="🔤 FIN WORD", page=FTWPage},
 }
 local function switchCat(idx)
     for _,p in ipairs(allPages) do p.Visible=false end
@@ -3131,6 +3133,11 @@ local function _setupLemons() -- own function = own 200-register space
 end -- _setupLemons
 _setupLemons()
 
+-- ── 🔤 FINISH THE WORD ──────────────────────────────────
+local function _setupFTW()
+    makeDivider(FTWPage,"FINISH THE WORD")
+end
+_setupFTW()
 
 end -- _hub()
 
