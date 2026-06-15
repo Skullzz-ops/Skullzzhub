@@ -3293,6 +3293,41 @@ local function _setupFTW()
                 if q then notify("Q: "..q) end
                 notify("Input so far: \""..cur.."\"  |  Choices: "..table.concat(ch,", "))
             end)
+            -- Full diagnostic: type first choice, log input before/after + tryAnswer result
+            makeButton(sf,"Deep Debug (F9)",function()
+                task.spawn(function()
+                    local ch=getChoices()
+                    local before=getCurrentInput()
+                    warn("[FTW-DBG] Question: "..tostring(getQuestion()))
+                    warn("[FTW-DBG] Choices: "..table.concat(ch," | "))
+                    warn("[FTW-DBG] AnswerInput BEFORE: '"..before.."'")
+                    -- Type the first choice
+                    if #ch>0 then
+                        warn("[FTW-DBG] Firing keyStroke('"..ch[1].."')...")
+                        ftwKey(ch[1]); task.wait(0.3)
+                        local after1=getCurrentInput()
+                        warn("[FTW-DBG] AnswerInput AFTER keyStroke: '"..after1.."'")
+                        local newCh=getChoices()
+                        warn("[FTW-DBG] Choices AFTER keyStroke: "..table.concat(newCh," | "))
+                        -- Try answer and log result
+                        local r=getFTWRemote()
+                        if r then
+                            local ok,res=pcall(function() return r:InvokeServer("tryAnswer") end)
+                            warn("[FTW-DBG] tryAnswer → ok="..tostring(ok).." result="..tostring(res).." type="..type(res))
+                        end
+                        task.wait(0.2)
+                        local after2=getCurrentInput()
+                        warn("[FTW-DBG] AnswerInput AFTER tryAnswer: '"..after2.."'")
+                        local ch2=getChoices()
+                        warn("[FTW-DBG] Choices AFTER tryAnswer: "..table.concat(ch2," | "))
+                        -- Try backspace
+                        ftwBackspace(); task.wait(0.2)
+                        local afterBack=getCurrentInput()
+                        warn("[FTW-DBG] AnswerInput AFTER backspace: '"..afterBack.."'")
+                    end
+                    notify("FTW: deep debug done — check F9")
+                end)
+            end)
         end
     )
 
