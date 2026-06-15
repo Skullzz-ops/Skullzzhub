@@ -2861,10 +2861,17 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         table.sort(buttons,function(a,b) return a.price<b.price end)
         local bought=0
         local lastErr=nil
+        local lastErrBtn=nil
         for _,b in ipairs(buttons) do
+            -- try InvokeServer first, fall back to FireServer
             local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
             if not ok then
-                lastErr=tostring(res):sub(1,80)
+                lastErr=tostring(res)
+                lastErrBtn=b.name
+                warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..tostring(res))
+                -- try FireServer in case it's actually a RemoteEvent
+                local ok2=pcall(function() b.remote:FireServer(false) end)
+                if ok2 then bought=bought+1; if notify then notify("Bought(F): "..b.name) end end
             elseif res==true then
                 bought=bought+1
                 if notify then notify("Bought: "..b.name) end
@@ -2872,9 +2879,10 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         end
         if bought==0 and notify then
             if lastErr then
-                notify("AutoBuy ERR: "..lastErr)
+                local short=lastErr:match("([^:]+)$") or lastErr
+                notify("ERR "..tostring(lastErrBtn)..": "..short:sub(1,70))
             else
-                notify("AutoBuy: server rejected all "..#buttons.." (can't afford?)")
+                notify("AutoBuy: server returned non-true for all "..#buttons)
             end
         end
         return bought>0
