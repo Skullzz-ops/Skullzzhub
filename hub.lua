@@ -2731,9 +2731,8 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     end)
 
     -- ── Auto Buy ────────────────────────────────────────
-    local AUTOBUY={Enabled=false, Delay=2}
+    local AUTOBUY={Enabled=false, Delay=0.5}
     local buyTask=nil
-    local watchConn=nil
 
     local function parseMoney(str)
         if not str then return nil end
@@ -2886,7 +2885,8 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
             else
                 local err=tostring(res)
                 local low=err:lower()
-                if low:find("already") or low:find("purchased") or low:find("owned") then
+                if low:find("already") or low:find("purchased") or low:find("owned")
+                   or low:find("not purchasable") or low:find("disabled") then
                     skippedOwned=skippedOwned+1
                 else
                     realErr=err
@@ -2905,30 +2905,11 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         return bought>0
     end
 
-    local function setupWatcher()
-        if watchConn then watchConn:Disconnect(); watchConn=nil end
-        local t=findTycoon(); if not t then return end
-        local purch=t:FindFirstChild("Purchases"); if not purch then return end
-        watchConn=purch.DescendantAdded:Connect(function(desc)
-            if not AUTOBUY.Enabled then return end
-            if desc.Name=="Purchase" and
-               (desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent")) then
-                -- tiny yield so the button fully initializes before we invoke
-                task.delay(0.05, function()
-                    if AUTOBUY.Enabled then doBuyOne() end
-                end)
-            end
-        end)
-    end
-
     local function setAutoBuy(v)
         AUTOBUY.Enabled=v
         if buyTask then task.cancel(buyTask); buyTask=nil end
-        if watchConn then watchConn:Disconnect(); watchConn=nil end
         if v then
-            doBuyOne()     -- immediate first attempt
-            setupWatcher() -- fire instantly when a new button spawns
-            -- slow fallback poll to catch anything the watcher might miss
+            doBuyOne()
             buyTask=task.spawn(function()
                 while AUTOBUY.Enabled do
                     task.wait(AUTOBUY.Delay)
@@ -2941,7 +2922,6 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     table.insert(cleanupHooks,function()
         AUTOBUY.Enabled=false
         if buyTask then task.cancel(buyTask); buyTask=nil end
-        if watchConn then watchConn:Disconnect(); watchConn=nil end
     end)
 
     -- ── UI ──────────────────────────────────────────────
@@ -2996,7 +2976,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         function(v) setAutoBuy(v) end,
         "Scans your tycoon for all purchase buttons and buys everything you can afford on repeat.",
         function(sf)
-            makeSlider(sf,"Fallback Delay",0.5,10,AUTOBUY.Delay,0.5,"%.1f s",
+            makeSlider(sf,"Delay",0.3,5,AUTOBUY.Delay,0.1,"%.1f s",
                 function(v) AUTOBUY.Delay=v end)
             makeButton(sf,"Buy Once",function() doBuyOne() end)
             makeButton(sf,"Scan Debug",function() scanDebug() end)
