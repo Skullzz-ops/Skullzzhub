@@ -2795,26 +2795,23 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     local function scanButtons(tycoon)
         local result={}
         local purch=tycoon:FindFirstChild("Purchases"); if not purch then return result end
-        for _,cat in ipairs(purch:GetChildren()) do
-            -- check direct Buttons child
-            local btnsF=cat:FindFirstChild("Buttons")
-            if btnsF then
-                for _,btn in ipairs(btnsF:GetChildren()) do
-                    -- Billboard might be any Instance type; search by name
-                    for _,bbChild in ipairs(btn:GetChildren()) do
-                        if bbChild.Name=="Billboard" then
-                            local remote=bbChild:FindFirstChild("Purchase")
-                            if remote then
-                                table.insert(result,{
-                                    remote=remote,
-                                    price=getButtonPrice(btn),
-                                    name=btn.Name,
-                                    cat=cat.Name,
-                                })
-                            end
-                            break
-                        end
-                    end
+        -- Deep search: find every "Purchase" remote anywhere under Purchases
+        for _,desc in ipairs(purch:GetDescendants()) do
+            if desc.Name=="Purchase" and
+               (desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent")) then
+                -- billboard = desc.Parent, button = billboard.Parent
+                local bb=desc.Parent
+                local btn=bb and bb.Parent
+                local btnsF=btn and btn.Parent
+                local cat=btnsF and btnsF.Parent
+                if btn and btnsF and btnsF.Name=="Buttons" and cat then
+                    table.insert(result,{
+                        remote=desc,
+                        isEvent=desc:IsA("RemoteEvent"),
+                        price=getButtonPrice(btn),
+                        name=btn.Name,
+                        cat=cat.Name,
+                    })
                 end
             end
         end
@@ -2864,12 +2861,17 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         local skippedAfford=0
         local realErr=nil
         for _,b in ipairs(buttons) do
-            local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
+            local ok,res
+            if b.isEvent then
+                ok=pcall(function() b.remote:FireServer(false) end)
+                res=nil
+            else
+                ok,res=pcall(function() return b.remote:InvokeServer(false) end)
+            end
             if ok then
                 if res==false then
                     skippedAfford=skippedAfford+1
                 else
-                    -- nil or true both mean success
                     bought=bought+1
                     if notify then notify("Bought: "..b.name) end
                 end
