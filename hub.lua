@@ -2682,7 +2682,10 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     local LEMONS={AutoUpgrade=false, UpgradeDelay=1.0}
 
     -- Add more names here as user provides them
-    local UPGRADE_LIST={"Lemon Stand"}
+    local UPGRADE_LIST={
+        "Lemon Stand","Lemon Trading","Lemon Depot","Lemon Labs",
+        "Lemon Republic","Lemon Robotics","LemonDash","LemonX","LemonX Ground",
+    }
     local selUpgrade="Lemon Stand"
     local upgradeTask=nil
     local selBtns={}   -- {name -> {row, dot}} for radio UI
@@ -2702,7 +2705,15 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         return mine
     end
 
+    local function doUpgradeOne(name)
+        local t=findTycoon(); if not t then return end
+        pcall(function()
+            t.Purchases[name][name][name].Upgrade:InvokeServer(1)
+        end)
+    end
+
     local function doUpgrade()
+        -- single upgrade for "Upgrade Once" button (uses selector)
         local t=findTycoon(); if not t then
             if notify then notify("Lemons: tycoon not found") end; return
         end
@@ -2718,7 +2729,10 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         if v then
             upgradeTask=task.spawn(function()
                 while LEMONS.AutoUpgrade do
-                    doUpgrade()
+                    -- upgrade every item in the list each tick
+                    for _,name in ipairs(UPGRADE_LIST) do
+                        doUpgradeOne(name)
+                    end
                     task.wait(LEMONS.UpgradeDelay)
                 end
             end)
