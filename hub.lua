@@ -2731,8 +2731,9 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     end)
 
     -- ── Auto Buy ────────────────────────────────────────
-    local AUTOBUY={Enabled=false, Delay=0.8}
+    local AUTOBUY={Enabled=false, Delay=2}
     local buyTask=nil
+    local watchConn=nil
 
     local function parseMoney(str)
         if not str then return nil end
@@ -2904,14 +2905,34 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         return bought>0
     end
 
+    local function setupWatcher()
+        if watchConn then watchConn:Disconnect(); watchConn=nil end
+        local t=findTycoon(); if not t then return end
+        local purch=t:FindFirstChild("Purchases"); if not purch then return end
+        watchConn=purch.DescendantAdded:Connect(function(desc)
+            if not AUTOBUY.Enabled then return end
+            if desc.Name=="Purchase" and
+               (desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent")) then
+                -- tiny yield so the button fully initializes before we invoke
+                task.delay(0.05, function()
+                    if AUTOBUY.Enabled then doBuyOne() end
+                end)
+            end
+        end)
+    end
+
     local function setAutoBuy(v)
         AUTOBUY.Enabled=v
         if buyTask then task.cancel(buyTask); buyTask=nil end
+        if watchConn then watchConn:Disconnect(); watchConn=nil end
         if v then
+            doBuyOne()     -- immediate first attempt
+            setupWatcher() -- fire instantly when a new button spawns
+            -- slow fallback poll to catch anything the watcher might miss
             buyTask=task.spawn(function()
                 while AUTOBUY.Enabled do
-                    doBuyOne()
                     task.wait(AUTOBUY.Delay)
+                    doBuyOne()
                 end
             end)
         end
@@ -2920,6 +2941,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     table.insert(cleanupHooks,function()
         AUTOBUY.Enabled=false
         if buyTask then task.cancel(buyTask); buyTask=nil end
+        if watchConn then watchConn:Disconnect(); watchConn=nil end
     end)
 
     -- ── UI ──────────────────────────────────────────────
@@ -2974,7 +2996,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         function(v) setAutoBuy(v) end,
         "Scans your tycoon for all purchase buttons and buys everything you can afford on repeat.",
         function(sf)
-            makeSlider(sf,"Delay",0.1,5,AUTOBUY.Delay,0.1,"%.1f s",
+            makeSlider(sf,"Fallback Delay",0.5,10,AUTOBUY.Delay,0.5,"%.1f s",
                 function(v) AUTOBUY.Delay=v end)
             makeButton(sf,"Buy Once",function() doBuyOne() end)
             makeButton(sf,"Scan Debug",function() scanDebug() end)
