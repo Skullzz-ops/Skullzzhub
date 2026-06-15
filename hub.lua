@@ -2795,22 +2795,29 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     local function scanButtons(tycoon)
         local result={}
         local purch=tycoon:FindFirstChild("Purchases"); if not purch then return result end
-        -- Deep search: find every "Purchase" remote anywhere under Purchases
         for _,desc in ipairs(purch:GetDescendants()) do
             if desc.Name=="Purchase" and
                (desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent")) then
-                -- billboard = desc.Parent, button = billboard.Parent
-                local bb=desc.Parent
-                local btn=bb and bb.Parent
-                local btnsF=btn and btn.Parent
-                local cat=btnsF and btnsF.Parent
-                if btn and btnsF and btnsF.Name=="Buttons" and cat then
+                -- Walk up the tree to find an ancestor whose parent is named "Buttons"
+                -- That ancestor is the button, regardless of how many layers deep Purchase is
+                local cur=desc.Parent
+                local btn=nil
+                local cat=nil
+                while cur and cur~=purch do
+                    if cur.Parent and cur.Parent.Name=="Buttons" then
+                        btn=cur
+                        cat=cur.Parent.Parent
+                        break
+                    end
+                    cur=cur.Parent
+                end
+                if btn then
                     table.insert(result,{
                         remote=desc,
                         isEvent=desc:IsA("RemoteEvent"),
                         price=getButtonPrice(btn),
                         name=btn.Name,
-                        cat=cat.Name,
+                        cat=cat and cat.Name or "?",
                     })
                 end
             end
