@@ -3135,17 +3135,24 @@ _setupLemons()
 
 -- ── 💼 HACK A BUSINESS ──────────────────────────────────
 local function _setupHackBiz()
-    local HACKBIZ={SpeedEnabled=false, SpeedDelay=0.1, SpeedAmount=1}
+    local HACKBIZ={SpeedEnabled=false, SpeedDelay=0.1, SpeedAmount=1, MinMoney=0}
     local speedTask=nil
     local speedRemote=nil
     pcall(function()
         speedRemote=game:GetService("ReplicatedStorage").Events.ToServer.BuySpeed
     end)
 
+    local function getMoney()
+        local ls=LP:FindFirstChild("leaderstats")
+        local mv=ls and ls:FindFirstChild("Money")
+        return mv and mv.Value or 0
+    end
+
     local function buySpeed()
         if not speedRemote then
             if notify then notify("HackBiz: remote not found") end; return
         end
+        if getMoney() < HACKBIZ.MinMoney then return end
         pcall(function() speedRemote:FireServer(HACKBIZ.SpeedAmount) end)
     end
 
@@ -3175,6 +3182,8 @@ local function _setupHackBiz()
         function(sf)
             makeSlider(sf,"Delay",0.05,2,HACKBIZ.SpeedDelay,0.05,"%.2f s",
                 function(v) HACKBIZ.SpeedDelay=v end)
+            makeSlider(sf,"Min Money",0,1e6,HACKBIZ.MinMoney,1000,"%.0f",
+                function(v) HACKBIZ.MinMoney=v end)
             -- Amount picker: 1 or 5
             local amountBtns={}
             local function updateAmountUI()
