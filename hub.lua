@@ -2796,18 +2796,24 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         local result={}
         local purch=tycoon:FindFirstChild("Purchases"); if not purch then return result end
         for _,cat in ipairs(purch:GetChildren()) do
+            -- check direct Buttons child
             local btnsF=cat:FindFirstChild("Buttons")
             if btnsF then
                 for _,btn in ipairs(btnsF:GetChildren()) do
-                    local bb=btn:FindFirstChild("Billboard")
-                    local remote=bb and bb:FindFirstChild("Purchase")
-                    if remote then
-                        table.insert(result,{
-                            remote=remote,
-                            price=getButtonPrice(btn),
-                            name=btn.Name,
-                            cat=cat.Name,
-                        })
+                    -- Billboard might be any Instance type; search by name
+                    for _,bbChild in ipairs(btn:GetChildren()) do
+                        if bbChild.Name=="Billboard" then
+                            local remote=bbChild:FindFirstChild("Purchase")
+                            if remote then
+                                table.insert(result,{
+                                    remote=remote,
+                                    price=getButtonPrice(btn),
+                                    name=btn.Name,
+                                    cat=cat.Name,
+                                })
+                            end
+                            break
+                        end
                     end
                 end
             end
@@ -2815,25 +2821,56 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         return result
     end
 
+    local function scanDebug()
+        local t=findTycoon()
+        if not t then
+            if notify then notify("Scan: no tycoon found") end; return
+        end
+        local purch=t:FindFirstChild("Purchases")
+        if not purch then
+            if notify then notify("Scan: no Purchases in "..t.Name) end; return
+        end
+        local cats=purch:GetChildren()
+        if #cats==0 then
+            if notify then notify("Scan: Purchases is empty") end; return
+        end
+        local btns=scanButtons(t)
+        if #btns==0 then
+            if notify then notify("Scan: "..t.Name.." has "..#cats.." cats but 0 buttons") end
+        else
+            if notify then notify("Scan: "..t.Name.." → "..#btns.." button(s) found") end
+            for i,b in ipairs(btns) do
+                if i<=4 then
+                    if notify then task.delay((i-1)*1.5,function()
+                        notify(b.cat.."/"..b.name.." $"..b.price)
+                    end) end
+                end
+            end
+        end
+    end
+
     local function doBuyOne()
         local t=findTycoon()
         if not t then
             if notify then notify("AutoBuy: tycoon not found") end; return false
         end
-        local cash=getCash()
         local buttons=scanButtons(t)
-        if #buttons==0 then return false end
+        if #buttons==0 then
+            if notify then notify("AutoBuy: no buttons found in "..t.Name) end; return false
+        end
         table.sort(buttons,function(a,b) return a.price<b.price end)
+        local cash=getCash()
+        local bought=0
         for _,b in ipairs(buttons) do
             if b.price==0 or b.price<=cash then
-                local ok=pcall(function() b.remote:InvokeServer(false) end)
+                local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
                 if ok then
+                    bought=bought+1
                     if notify then notify("Bought: "..b.name) end
-                    return true
                 end
             end
         end
-        return false
+        return bought>0
     end
 
     local function setAutoBuy(v)
@@ -2904,11 +2941,12 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     makeDivider(LemonsPage,"AUTO BUY")
     makeModCard(LemonsPage,"Auto Buy",AUTOBUY,"Enabled",
         function(v) setAutoBuy(v) end,
-        "Scans your tycoon for all purchase buttons, finds the cheapest you can afford, and buys it on repeat.",
+        "Scans your tycoon for all purchase buttons and buys everything you can afford on repeat.",
         function(sf)
             makeSlider(sf,"Delay",0.1,5,AUTOBUY.Delay,0.1,"%.1f s",
                 function(v) AUTOBUY.Delay=v end)
             makeButton(sf,"Buy Once",function() doBuyOne() end)
+            makeButton(sf,"Scan Debug",function() scanDebug() end)
         end
     )
 
