@@ -3135,7 +3135,81 @@ _setupLemons()
 
 -- ── 💼 HACK A BUSINESS ──────────────────────────────────
 local function _setupHackBiz()
-    makeDivider(HackBizPage,"HACK A BUSINESS")
+    local HACKBIZ={SpeedEnabled=false, SpeedDelay=0.1, SpeedAmount=1}
+    local speedTask=nil
+    local speedRemote=nil
+    pcall(function()
+        speedRemote=game:GetService("ReplicatedStorage").Events.ToServer.BuySpeed
+    end)
+
+    local function buySpeed()
+        if not speedRemote then
+            if notify then notify("HackBiz: remote not found") end; return
+        end
+        pcall(function() speedRemote:FireServer(HACKBIZ.SpeedAmount) end)
+    end
+
+    local function setAutoSpeed(v)
+        HACKBIZ.SpeedEnabled=v
+        if speedTask then task.cancel(speedTask); speedTask=nil end
+        if v then
+            speedTask=task.spawn(function()
+                while HACKBIZ.SpeedEnabled do
+                    buySpeed()
+                    task.wait(HACKBIZ.SpeedDelay)
+                end
+            end)
+        end
+    end
+
+    table.insert(cleanupHooks,function()
+        HACKBIZ.SpeedEnabled=false
+        if speedTask then task.cancel(speedTask); speedTask=nil end
+    end)
+
+    -- ── UI ───────────────────────────────────────────────
+    makeDivider(HackBizPage,"SPEED")
+    makeModCard(HackBizPage,"Auto Buy Speed",HACKBIZ,"SpeedEnabled",
+        function(v) setAutoSpeed(v) end,
+        "Repeatedly buys speed upgrades. Set amount to 5 for faster stacking.",
+        function(sf)
+            makeSlider(sf,"Delay",0.05,2,HACKBIZ.SpeedDelay,0.05,"%.2f s",
+                function(v) HACKBIZ.SpeedDelay=v end)
+            -- Amount picker: 1 or 5
+            local amountBtns={}
+            local function updateAmountUI()
+                for amt,refs in pairs(amountBtns) do
+                    local on=(amt==HACKBIZ.SpeedAmount)
+                    refs.row.BackgroundColor3=on and CARD_ON or CARD_OFF
+                    refs.dot.BackgroundColor3=on and ACCENT or DIM
+                end
+            end
+            for _,amt in ipairs({1,5}) do
+                local row=Instance.new("Frame"); row.Size=UDim2.new(1,0,0,32)
+                row.BackgroundColor3=(amt==HACKBIZ.SpeedAmount) and CARD_ON or CARD_OFF
+                row.BorderSizePixel=0; row.LayoutOrder=O(); row.Parent=sf
+                Instance.new("UICorner",row).CornerRadius=UDim.new(0,6)
+                local st=Instance.new("UIStroke",row); st.Color=BORDER; st.Thickness=1
+                local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-32,1,0)
+                lbl.Position=UDim2.new(0,10,0,0); lbl.BackgroundTransparency=1
+                lbl.Text="Buy "..amt.." at a time"; lbl.TextColor3=WHITE
+                lbl.Font=Enum.Font.GothamBold; lbl.TextSize=12
+                lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Parent=row
+                local dot=Instance.new("Frame"); dot.Size=UDim2.new(0,10,0,10)
+                dot.AnchorPoint=Vector2.new(1,0.5); dot.Position=UDim2.new(1,-10,0.5,0)
+                dot.BackgroundColor3=(amt==HACKBIZ.SpeedAmount) and ACCENT or DIM
+                dot.BorderSizePixel=0; dot.Parent=row
+                Instance.new("UICorner",dot).CornerRadius=UDim.new(1,0)
+                local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,0,1,0)
+                btn.BackgroundTransparency=1; btn.Text=""; btn.Parent=row
+                amountBtns[amt]={row=row,dot=dot}
+                btn.MouseButton1Click:Connect(function()
+                    HACKBIZ.SpeedAmount=amt; updateAmountUI()
+                end)
+            end
+            makeButton(sf,"Buy Once",function() buySpeed() end)
+        end
+    )
 end
 _setupHackBiz()
 
