@@ -2859,15 +2859,22 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
             if notify then notify("AutoBuy: no buttons found in "..t.Name) end; return false
         end
         table.sort(buttons,function(a,b) return a.price<b.price end)
-        local cash=getCash()
         local bought=0
+        local errors=0
         for _,b in ipairs(buttons) do
-            if b.price==0 or b.price<=cash then
-                local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
-                if ok then
-                    bought=bought+1
-                    if notify then notify("Bought: "..b.name) end
-                end
+            local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
+            if not ok then
+                errors=errors+1
+            elseif res==true then
+                bought=bought+1
+                if notify then notify("Bought: "..b.name) end
+            end
+        end
+        if bought==0 and notify then
+            if errors>0 then
+                notify("AutoBuy: "..errors.." error(s) — check F9")
+            else
+                notify("AutoBuy: server rejected all "..#buttons.." button(s) (can't afford?)")
             end
         end
         return bought>0
