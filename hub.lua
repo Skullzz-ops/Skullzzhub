@@ -3136,6 +3136,157 @@ _setupLemons()
 -- ── 🔤 FINISH THE WORD ──────────────────────────────────
 local function _setupFTW()
     makeDivider(FTWPage,"FINISH THE WORD")
+
+    local FTW        = {Delay=0.08}
+    local detectedLabel = nil
+    local FTW_SOLVING   = false
+    local ftwAutoTask   = nil
+
+    local function getFTWRemote()
+        local ok,r=pcall(function()
+            return game:GetService("ReplicatedStorage").Services.Communication.event.RemoteFunction
+        end)
+        return ok and r or nil
+    end
+
+    local function ftwKey(letter)
+        local r=getFTWRemote(); if not r then return end
+        pcall(function() r:InvokeServer("keyStroke",letter) end)
+    end
+
+    local function ftwSubmit()
+        local r=getFTWRemote(); if not r then return end
+        pcall(function() r:InvokeServer("tryAnswer") end)
+    end
+
+    -- Scan PlayerGui for a TextLabel whose text contains letters + underscores (word with blanks)
+    local function findWordLabel()
+        for _,d in ipairs(LP.PlayerGui:GetDescendants()) do
+            if d:IsA("TextLabel") then
+                local t=d.Text:upper():gsub("%s","")
+                if #t>=2 and t:find("[A-Z]") and t:find("_") and t:match("^[A-Z_%-%.]+$") then
+                    return d,t
+                end
+            end
+        end
+        return nil,nil
+    end
+
+    -- Try A-Z for each blank and watch the label to see if the letter was accepted
+    local function autoSolve(silent)
+        if FTW_SOLVING then return end
+        FTW_SOLVING=true
+        local label=detectedLabel
+        if not label or not label.Parent then
+            label=findWordLabel(); detectedLabel=label
+        end
+        if not label then
+            if not silent then notify("FTW: no word label found — use Scan Word first") end
+            FTW_SOLVING=false; return
+        end
+        local ALPHA="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        local safety=0
+        while safety<60 do
+            safety=safety+1
+            local cur=label.Text:upper():gsub("%s","")
+            local bp=cur:find("_")
+            if not bp then
+                ftwSubmit()
+                if not silent then notify("FTW: all blanks filled — submitted!") end
+                break
+            end
+            local found=false
+            for i=1,#ALPHA do
+                local ch=ALPHA:sub(i,i)
+                ftwKey(ch); task.wait(FTW.Delay)
+                local after=label.Text:upper():gsub("%s","")
+                if after:sub(bp,bp)~="_" then found=true; break end
+            end
+            if not found then
+                if not silent then notify("FTW: stuck at blank pos "..bp) end
+                break
+            end
+        end
+        FTW_SOLVING=false
+    end
+
+    local FTW_AUTO={Enabled=false}
+    local function setFTWAuto(v)
+        FTW_AUTO.Enabled=v
+        if ftwAutoTask then task.cancel(ftwAutoTask); ftwAutoTask=nil end
+        if v then
+            ftwAutoTask=task.spawn(function()
+                while FTW_AUTO.Enabled do autoSolve(true); task.wait(1.5) end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setFTWAuto(false) end)
+
+    makeModCard(FTWPage,"Auto Answer",FTW_AUTO,"Enabled",
+        function(v) setFTWAuto(v) end,
+        "Tries A-Z for each blank and watches the word label to see if the letter was accepted. Run Scan Word first if it can't find the label automatically.",
+        function(sf)
+            makeSlider(sf,"Letter Delay",0.03,0.3,FTW.Delay,0.01,"%.2f s",
+                function(v) FTW.Delay=v end)
+            makeButton(sf,"Scan Word Label",function()
+                local lbl,txt=findWordLabel()
+                if lbl then detectedLabel=lbl; notify("FTW: found \""..txt.."\" @ "..lbl:GetFullName())
+                else notify("FTW: no word label found in PlayerGui") end
+            end)
+            makeButton(sf,"Solve Once",function()
+                task.spawn(function() autoSolve(false) end)
+            end)
+        end
+    )
+
+    makeDivider(FTWPage,"MANUAL TYPE")
+
+    -- TextBox card for manual word entry
+    local manualWord=""
+    local inputCard=Instance.new("Frame")
+    inputCard.Size=UDim2.new(1,0,0,62)
+    inputCard.BackgroundColor3=CARD_OFF; inputCard.BorderSizePixel=0
+    inputCard.LayoutOrder=O(); inputCard.Parent=FTWPage
+    Instance.new("UICorner",inputCard).CornerRadius=UDim.new(0,7)
+    local wLbl=Instance.new("TextLabel")
+    wLbl.Size=UDim2.new(1,-12,0,16); wLbl.Position=UDim2.new(0,8,0,6)
+    wLbl.BackgroundTransparency=1; wLbl.Text="Word answer:"
+    wLbl.TextColor3=DIM; wLbl.TextSize=10; wLbl.Font=Enum.Font.Gotham
+    wLbl.TextXAlignment=Enum.TextXAlignment.Left; wLbl.Parent=inputCard
+    local ftwTB=Instance.new("TextBox")
+    ftwTB.Size=UDim2.new(1,-12,0,28); ftwTB.Position=UDim2.new(0,6,0,28)
+    ftwTB.BackgroundColor3=MID; ftwTB.BorderSizePixel=0
+    ftwTB.Text=""; ftwTB.PlaceholderText="type the answer here..."
+    ftwTB.TextColor3=WHITE; ftwTB.PlaceholderColor3=DIM
+    ftwTB.TextSize=12; ftwTB.Font=Enum.Font.GothamBold
+    ftwTB.ClearTextOnFocus=false; ftwTB.Parent=inputCard
+    Instance.new("UICorner",ftwTB).CornerRadius=UDim.new(0,5)
+    ftwTB.FocusLost:Connect(function(enter)
+        manualWord=ftwTB.Text
+        if enter and manualWord~="" then
+            task.spawn(function()
+                for i=1,#manualWord do
+                    local ch=manualWord:sub(i,i):upper()
+                    if ch:match("[A-Z]") then ftwKey(ch); task.wait(FTW.Delay) end
+                end
+                task.wait(0.1); ftwSubmit()
+            end)
+        end
+    end)
+
+    makeButton(FTWPage,"Type & Submit",function()
+        manualWord=ftwTB.Text
+        if manualWord=="" then notify("FTW: enter a word first") return end
+        task.spawn(function()
+            for i=1,#manualWord do
+                local ch=manualWord:sub(i,i):upper()
+                if ch:match("[A-Z]") then ftwKey(ch); task.wait(FTW.Delay) end
+            end
+            task.wait(0.1); ftwSubmit()
+        end)
+    end)
+
+    makeButton(FTWPage,"Submit Answer",function() ftwSubmit() end)
 end
 _setupFTW()
 
