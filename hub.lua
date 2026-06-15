@@ -2938,6 +2938,52 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         if buyTask then task.cancel(buyTask); buyTask=nil end
     end)
 
+    -- ── Auto Collect ────────────────────────────────────
+    local COLLECT={Enabled=false, Delay=0.5}
+    local collectTask=nil
+    local fruitEvent=nil
+    pcall(function()
+        fruitEvent=game:GetService("ReplicatedStorage").Core.RemoteSignal["ClickFruitService.Clicked"]
+    end)
+
+    local function collectOnce()
+        local count=0
+        for _,obj in ipairs(workspace:GetDescendants()) do
+            if obj.Name=="Fruit" and obj:IsA("BasePart") then
+                local cp=obj:FindFirstChild("ClickPart")
+                local det=cp and cp:FindFirstChild("ClickDetector")
+                if det then
+                    if fireclickdetector then
+                        pcall(fireclickdetector, det)
+                    elseif firesignal and fruitEvent then
+                        pcall(firesignal, fruitEvent.OnClientEvent, 0, obj.Position, false)
+                    end
+                    count=count+1
+                end
+            end
+        end
+        if notify and count>0 then notify("Collected "..count.." fruit(s)") end
+        return count
+    end
+
+    local function setAutoCollect(v)
+        COLLECT.Enabled=v
+        if collectTask then task.cancel(collectTask); collectTask=nil end
+        if v then
+            collectTask=task.spawn(function()
+                while COLLECT.Enabled do
+                    collectOnce()
+                    task.wait(COLLECT.Delay)
+                end
+            end)
+        end
+    end
+
+    table.insert(cleanupHooks,function()
+        COLLECT.Enabled=false
+        if collectTask then task.cancel(collectTask); collectTask=nil end
+    end)
+
     -- ── UI ──────────────────────────────────────────────
     makeDivider(LemonsPage,"AUTO UPGRADE")
 
@@ -2984,6 +3030,17 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
             selUpgrade=itemName; updateSelUI()
         end)
     end
+
+    makeDivider(LemonsPage,"AUTO COLLECT")
+    makeModCard(LemonsPage,"Auto Collect",COLLECT,"Enabled",
+        function(v) setAutoCollect(v) end,
+        "Finds every Fruit on every LemonTree in the map and collects it automatically.",
+        function(sf)
+            makeSlider(sf,"Delay",0.1,5,COLLECT.Delay,0.1,"%.1f s",
+                function(v) COLLECT.Delay=v end)
+            makeButton(sf,"Collect Once",function() collectOnce() end)
+        end
+    )
 
     makeDivider(LemonsPage,"AUTO BUY")
     makeModCard(LemonsPage,"Auto Buy",AUTOBUY,"Enabled",
