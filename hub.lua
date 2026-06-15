@@ -2860,30 +2860,28 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         end
         table.sort(buttons,function(a,b) return a.price<b.price end)
         local bought=0
-        local lastErr=nil
-        local lastErrBtn=nil
+        local realErr=nil
         for _,b in ipairs(buttons) do
-            -- try InvokeServer first, fall back to FireServer
             local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
-            if not ok then
-                lastErr=tostring(res)
-                lastErrBtn=b.name
-                warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..tostring(res))
-                -- try FireServer in case it's actually a RemoteEvent
-                local ok2=pcall(function() b.remote:FireServer(false) end)
-                if ok2 then bought=bought+1; if notify then notify("Bought(F): "..b.name) end end
-            elseif res==true then
-                bought=bought+1
-                if notify then notify("Bought: "..b.name) end
+            if ok then
+                -- server didn't throw = successful purchase
+                if res~=false then
+                    bought=bought+1
+                    if notify then notify("Bought: "..b.name) end
+                end
+                -- res==false means can't afford yet, skip silently
+            else
+                local err=tostring(res)
+                -- "already purchased" is expected for owned items, skip silently
+                if not err:lower():find("already") and not err:lower():find("purchased") then
+                    realErr=err
+                    warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..err)
+                end
             end
         end
-        if bought==0 and notify then
-            if lastErr then
-                local short=lastErr:match("([^:]+)$") or lastErr
-                notify("ERR "..tostring(lastErrBtn)..": "..short:sub(1,70))
-            else
-                notify("AutoBuy: server returned non-true for all "..#buttons)
-            end
+        if bought==0 and realErr and notify then
+            local short=realErr:match(": (.+)$") or realErr
+            notify("AutoBuy ERR: "..short:sub(1,70))
         end
         return bought>0
     end
