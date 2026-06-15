@@ -2747,7 +2747,6 @@ local function _setupLemons() -- own function = own 200-register space
     -- ── Auto Buy ────────────────────────────────────────
     local AUTOBUY={Enabled=false, Delay=0.5}
     local buyTask=nil
-    local buyDenylist={} -- remotes that always error, skip permanently this session
 
     local function parseMoney(str)
         if not str then return nil end
@@ -2881,47 +2880,27 @@ local function _setupLemons() -- own function = own 200-register space
         local bought=0
         local skippedOwned=0
         local skippedAfford=0
-        local realErr=nil
         for _,b in ipairs(buttons) do
-            local path=tostring(b.remote)
-            if buyDenylist[path] then
-                skippedOwned=skippedOwned+1
+            local ok,res
+            if b.isEvent then
+                ok=pcall(function() b.remote:FireServer(false) end)
+                res=nil
             else
-                local ok,res
-                if b.isEvent then
-                    ok=pcall(function() b.remote:FireServer(false) end)
-                    res=nil
+                ok,res=pcall(function() return b.remote:InvokeServer(false) end)
+            end
+            if ok then
+                if res==false then
+                    skippedAfford=skippedAfford+1
                 else
-                    ok,res=pcall(function() return b.remote:InvokeServer(false) end)
+                    bought=bought+1
+                    if notify then notify("Bought: "..b.name) end
                 end
-                if ok then
-                    if res==false then
-                        skippedAfford=skippedAfford+1
-                    else
-                        bought=bought+1
-                        if notify then notify("Bought: "..b.name) end
-                    end
-                else
-                    local err=tostring(res)
-                    local low=err:lower()
-                    if low:find("already") or low:find("purchased") or low:find("owned") then
-                        skippedOwned=skippedOwned+1
-                        buyDenylist[path]=true -- permanent: item already bought, skip forever
-                    else
-                        -- "not purchasable", "disabled", other errors are TEMPORARY
-                        -- do NOT denylist — retry next cycle when conditions change
-                        skippedOwned=skippedOwned+1
-                    end
-                end
+            else
+                skippedOwned=skippedOwned+1
             end
         end
         if bought==0 and not silent and notify then
-            if realErr then
-                local short=realErr:match(": (.+)$") or realErr
-                notify("AutoBuy ERR: "..short:sub(1,70))
-            else
-                notify("AutoBuy: "..#buttons.." found | "..skippedOwned.." owned | "..skippedAfford.." too expensive")
-            end
+            notify("AutoBuy: "..#buttons.." found | "..skippedOwned.." skipped | "..skippedAfford.." too expensive")
         end
         return bought>0
     end
@@ -3028,7 +3007,12 @@ local function _setupLemons() -- own function = own 200-register space
         if not remote then
             if notify then notify("Phone: remote not found") end; return
         end
-        for _=1,PHONE.RaiseCount do
+        -- Test if an offer is currently active by trying one Raise
+        -- If no offer is active the server will throw an error
+        local ok=pcall(function() remote:FireServer("Raise") end)
+        if not ok then return end -- no active offer, skip silently
+        -- Offer is active — raise remaining times then accept
+        for _=2,PHONE.RaiseCount do
             pcall(function() remote:FireServer("Raise") end)
             task.wait(0.05)
         end
