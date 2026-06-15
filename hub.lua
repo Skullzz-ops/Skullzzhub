@@ -2747,6 +2747,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     -- ── Auto Buy ────────────────────────────────────────
     local AUTOBUY={Enabled=false, Delay=0.5}
     local buyTask=nil
+    local buyDenylist={} -- remotes that always error, skip permanently this session
 
     local function parseMoney(str)
         if not str then return nil end
@@ -2882,29 +2883,36 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         local skippedAfford=0
         local realErr=nil
         for _,b in ipairs(buttons) do
-            local ok,res
-            if b.isEvent then
-                ok=pcall(function() b.remote:FireServer(false) end)
-                res=nil
+            local path=tostring(b.remote)
+            if buyDenylist[path] then
+                skippedOwned=skippedOwned+1
             else
-                ok,res=pcall(function() return b.remote:InvokeServer(false) end)
-            end
-            if ok then
-                if res==false then
-                    skippedAfford=skippedAfford+1
+                local ok,res
+                if b.isEvent then
+                    ok=pcall(function() b.remote:FireServer(false) end)
+                    res=nil
                 else
-                    bought=bought+1
-                    if notify then notify("Bought: "..b.name) end
+                    ok,res=pcall(function() return b.remote:InvokeServer(false) end)
                 end
-            else
-                local err=tostring(res)
-                local low=err:lower()
-                if low:find("already") or low:find("purchased") or low:find("owned")
-                   or low:find("not purchasable") or low:find("disabled") then
-                    skippedOwned=skippedOwned+1
+                if ok then
+                    if res==false then
+                        skippedAfford=skippedAfford+1
+                    else
+                        bought=bought+1
+                        if notify then notify("Bought: "..b.name) end
+                    end
                 else
-                    realErr=err
-                    warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..err)
+                    local err=tostring(res)
+                    local low=err:lower()
+                    if low:find("already") or low:find("purchased") or low:find("owned")
+                       or low:find("not purchasable") or low:find("disabled") then
+                        skippedOwned=skippedOwned+1
+                        buyDenylist[path]=true -- never try this one again
+                    else
+                        realErr=err
+                        warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..err)
+                        buyDenylist[path]=true -- also denylist unexpected errors
+                    end
                 end
             end
         end
