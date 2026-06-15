@@ -2810,30 +2810,30 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
     local function scanButtons(tycoon)
         local result={}
         local purch=tycoon:FindFirstChild("Purchases"); if not purch then return result end
-        for _,desc in ipairs(purch:GetDescendants()) do
-            if desc.Name=="Purchase" and
-               (desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent")) then
-                -- Walk up the tree to find an ancestor whose parent is named "Buttons"
-                -- That ancestor is the button, regardless of how many layers deep Purchase is
-                local cur=desc.Parent
-                local btn=nil
-                local cat=nil
-                while cur and cur~=purch do
-                    if cur.Parent and cur.Parent.Name=="Buttons" then
-                        btn=cur
-                        cat=cur.Parent.Parent
-                        break
+        for _,cat in ipairs(purch:GetChildren()) do
+            local btnsF=cat:FindFirstChild("Buttons")
+            if btnsF then
+                for _,btn in ipairs(btnsF:GetChildren()) do
+                    -- Only direct children of "Buttons" — skip sub-group folders
+                    -- (sub-groups like Buttons.Other.X cause game client errors)
+                    if btn:IsA("Model") or btn:IsA("Folder") then
+                        -- skip sub-groups entirely
+                    else
+                        -- btn is a Part/BasePart — find Purchase inside it
+                        for _,desc in ipairs(btn:GetDescendants()) do
+                            if desc.Name=="Purchase" and
+                               (desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent")) then
+                                table.insert(result,{
+                                    remote=desc,
+                                    isEvent=desc:IsA("RemoteEvent"),
+                                    price=getButtonPrice(btn),
+                                    name=btn.Name,
+                                    cat=cat.Name,
+                                })
+                                break
+                            end
+                        end
                     end
-                    cur=cur.Parent
-                end
-                if btn then
-                    table.insert(result,{
-                        remote=desc,
-                        isEvent=desc:IsA("RemoteEvent"),
-                        price=getButtonPrice(btn),
-                        name=btn.Name,
-                        cat=cat and cat.Name or "?",
-                    })
                 end
             end
         end
@@ -2883,7 +2883,7 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         local skippedAfford=0
         local realErr=nil
         for _,b in ipairs(buttons) do
-            local path=tostring(b.remote)
+            local path=b.remote:GetFullName()
             if buyDenylist[path] then
                 skippedOwned=skippedOwned+1
             else
