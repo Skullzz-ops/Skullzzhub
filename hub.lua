@@ -3006,6 +3006,47 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         if collectTask then task.cancel(collectTask); collectTask=nil end
     end)
 
+    -- ── Phone Offer ──────────────────────────────────────
+    local PHONE={Enabled=false, RaiseCount=10, Delay=5}
+    local phoneTask=nil
+
+    local function getPhoneRemote()
+        local t=findTycoon(); if not t then return nil end
+        local rem=t:FindFirstChild("Remotes")
+        return rem and rem:FindFirstChild("PhoneOffer")
+    end
+
+    local function doPhoneOffer()
+        local remote=getPhoneRemote()
+        if not remote then
+            if notify then notify("Phone: remote not found") end; return
+        end
+        for _=1,PHONE.RaiseCount do
+            pcall(function() remote:FireServer("Raise") end)
+            task.wait(0.05)
+        end
+        pcall(function() remote:FireServer("Accept") end)
+        if notify then notify("Phone: raised x"..PHONE.RaiseCount.." + accepted") end
+    end
+
+    local function setAutoPhone(v)
+        PHONE.Enabled=v
+        if phoneTask then task.cancel(phoneTask); phoneTask=nil end
+        if v then
+            phoneTask=task.spawn(function()
+                while PHONE.Enabled do
+                    doPhoneOffer()
+                    task.wait(PHONE.Delay)
+                end
+            end)
+        end
+    end
+
+    table.insert(cleanupHooks,function()
+        PHONE.Enabled=false
+        if phoneTask then task.cancel(phoneTask); phoneTask=nil end
+    end)
+
     -- ── UI ──────────────────────────────────────────────
     makeDivider(LemonsPage,"AUTO UPGRADE")
 
@@ -3061,6 +3102,26 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
             makeSlider(sf,"Delay",0.1,5,COLLECT.Delay,0.1,"%.1f s",
                 function(v) COLLECT.Delay=v end)
             makeButton(sf,"Collect Once",function() collectOnce(false) end)
+        end
+    )
+
+    makeDivider(LemonsPage,"PHONE OFFER")
+    makeModCard(LemonsPage,"Auto Phone Offer",PHONE,"Enabled",
+        function(v) setAutoPhone(v) end,
+        "Raises the phone offer then accepts it. Repeats on a loop.",
+        function(sf)
+            makeSlider(sf,"Raise Count",1,30,PHONE.RaiseCount,1,"%.0f x",
+                function(v) PHONE.RaiseCount=math.floor(v) end)
+            makeSlider(sf,"Delay",1,30,PHONE.Delay,1,"%.0f s",
+                function(v) PHONE.Delay=v end)
+            makeButton(sf,"Raise Once",function()
+                local r=getPhoneRemote()
+                if r then pcall(function() r:FireServer("Raise") end) end
+            end)
+            makeButton(sf,"Accept",function()
+                local r=getPhoneRemote()
+                if r then pcall(function() r:FireServer("Accept") end) end
+            end)
         end
     )
 
