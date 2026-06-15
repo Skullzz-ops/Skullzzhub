@@ -2860,28 +2860,37 @@ do -- 🍋 LEMONS (Sell Lemons tycoon)
         end
         table.sort(buttons,function(a,b) return a.price<b.price end)
         local bought=0
+        local skippedOwned=0
+        local skippedAfford=0
         local realErr=nil
         for _,b in ipairs(buttons) do
             local ok,res=pcall(function() return b.remote:InvokeServer(false) end)
             if ok then
-                -- server didn't throw = successful purchase
-                if res~=false then
+                if res==false then
+                    skippedAfford=skippedAfford+1
+                else
+                    -- nil or true both mean success
                     bought=bought+1
                     if notify then notify("Bought: "..b.name) end
                 end
-                -- res==false means can't afford yet, skip silently
             else
                 local err=tostring(res)
-                -- "already purchased" is expected for owned items, skip silently
-                if not err:lower():find("already") and not err:lower():find("purchased") then
+                local low=err:lower()
+                if low:find("already") or low:find("purchased") or low:find("owned") then
+                    skippedOwned=skippedOwned+1
+                else
                     realErr=err
                     warn("[SkullzzHub AutoBuy] "..b.name.." ERR: "..err)
                 end
             end
         end
-        if bought==0 and realErr and notify then
-            local short=realErr:match(": (.+)$") or realErr
-            notify("AutoBuy ERR: "..short:sub(1,70))
+        if bought==0 and notify then
+            if realErr then
+                local short=realErr:match(": (.+)$") or realErr
+                notify("AutoBuy ERR: "..short:sub(1,70))
+            else
+                notify("AutoBuy: "..#buttons.." found | "..skippedOwned.." owned | "..skippedAfford.." too expensive")
+            end
         end
         return bought>0
     end
