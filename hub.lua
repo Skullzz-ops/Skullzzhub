@@ -3230,6 +3230,71 @@ local function _setupWings()
     makeButton(WingsPage,"TP → My Plot",function()
         tpToPart(getPlot(),8)
     end)
+
+    makeDivider(WingsPage,"BRAINROTS")
+
+    -- Parse a rate string like "+1.3B/s" → number
+    local SUF={K=1e3,M=1e6,B=1e9,T=1e12,Q=1e15}
+    local function parseRate(s)
+        if not s then return 0 end
+        local num,suf=tostring(s):match("([%d%.]+)%s*([KkMmBbTtQq]?)")
+        if not num then return 0 end
+        local v=tonumber(num) or 0
+        suf=(suf or ""):upper()
+        if SUF[suf] then v=v*SUF[suf] end
+        return v
+    end
+
+    -- A brainrot = any Instance under ItemSpawners that has an "InfoGUI" child
+    local function getBrainrots()
+        local out={}
+        local spawners=workspace:FindFirstChild("ItemSpawners")
+        if not spawners then return out end
+        for _,d in ipairs(spawners:GetDescendants()) do
+            if d:FindFirstChild("InfoGUI") then
+                -- read the best $/s rate found in the InfoGUI text labels
+                local best=0; local rateText=nil
+                for _,g in ipairs(d.InfoGUI:GetDescendants()) do
+                    if g:IsA("TextLabel") or g:IsA("TextButton") then
+                        local t=g.Text or ""
+                        if t:find("/s") or t:find("[KMBTQ]") then
+                            local v=parseRate(t)
+                            if v>best then best=v; rateText=t end
+                        end
+                    end
+                end
+                table.insert(out,{model=d, name=d.Name, rate=best, rateText=rateText})
+            end
+        end
+        table.sort(out,function(a,b) return a.rate>b.rate end)
+        return out
+    end
+
+    makeButton(WingsPage,"TP → Best Brainrot",function()
+        local b=getBrainrots()
+        if #b==0 then notify("Wings: no brainrots found") return end
+        local top=b[1]
+        tpToPart(top.model,5)
+        notify("Wings: TP to "..top.name.." ("..(top.rateText or "?")..")")
+    end)
+    makeButton(WingsPage,"Scan Brainrots (F9)",function()
+        local b=getBrainrots()
+        warn("[WINGS] Found "..#b.." brainrots in ItemSpawners:")
+        for i,v in ipairs(b) do
+            warn(string.format("  [%d] %s | rate=%s (%s) | @ %s",
+                i, v.name, tostring(v.rate), tostring(v.rateText), v.model:GetFullName()))
+        end
+        -- also dump the InfoGUI structure of the first one so we can verify rate parsing
+        if b[1] then
+            warn("[WINGS] InfoGUI structure of '"..b[1].name.."':")
+            for _,g in ipairs(b[1].model.InfoGUI:GetDescendants()) do
+                if g:IsA("TextLabel") or g:IsA("TextButton") then
+                    warn(string.format("    %s = %q",g.Name,g.Text))
+                end
+            end
+        end
+        notify("Wings: dumped "..#b.." brainrots to F9")
+    end)
 end
 _setupWings()
 
