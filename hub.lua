@@ -3427,14 +3427,15 @@ local function _setupNoob()
             end
             return false
         end
-        fire("Rebirth")
+        local r=getRemote()
+        local ok,err=pcall(function() r:FireServer("Rebirth") end)
         if not silent then
-            warn(string.format("[NOOB] FIRED Rebirth | cash=%s need=%s (UseCost=%s)",
-                tostring(cash), tostring(need), tostring(REBIRTH.UseCost)))
-            notify(string.format("Noob: fired Rebirth (cash %s / need %s)",
-                cash and string.format("%.0f",cash) or "?", (need and need>0) and string.format("%.0f",need) or "any"))
+            warn(string.format("[NOOB] FireServer('Rebirth') ok=%s err=%s | cash=%s need=%s UseCost=%s",
+                tostring(ok), tostring(err), tostring(cash), tostring(need), tostring(REBIRTH.UseCost)))
+            notify(string.format("Noob: fired Rebirth (cash %s) ok=%s",
+                cash and string.format("%.0f",cash) or "?", tostring(ok)))
         end
-        return true
+        return ok
     end
     local function setAutoRebirth(v)
         REBIRTH.Enabled=v
