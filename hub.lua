@@ -1471,7 +1471,8 @@ local TrollPage       = makePage()
 local DropPage        = makePage()
 local GamesPage       = makePage()
 local LemonsPage      = makePage()
-local allPages={CombatPage,ESPPage,MovePage,ExtrasPage,ConfigPage,BillionairePage,TrollPage,DropPage,GamesPage,LemonsPage}
+local WingsPage       = makePage()
+local allPages={CombatPage,ESPPage,MovePage,ExtrasPage,ConfigPage,BillionairePage,TrollPage,DropPage,GamesPage,LemonsPage,WingsPage}
 
 -- ── Sidebar Buttons ────────────────────────────────────
 local CATS={
@@ -1485,6 +1486,7 @@ local CATS={
     {label="🔴 DROP",  page=DropPage},
     {label="🎮 GAMES", page=GamesPage},
     {label="🍋 LEMONS", page=LemonsPage},
+    {label="🪽 WINGS",  page=WingsPage},
 }
 local function switchCat(idx)
     for _,p in ipairs(allPages) do p.Visible=false end
@@ -3130,6 +3132,12 @@ local function _setupLemons() -- own function = own 200-register space
 
 end -- _setupLemons
 _setupLemons()
+
+-- ── 🪽 +1 WINGS FOR BRAINROT ────────────────────────────
+local function _setupWings()
+    makeDivider(WingsPage,"+1 WINGS FOR BRAINROT")
+end
+_setupWings()
 
 end -- _hub()
 
