@@ -3147,6 +3147,73 @@ local function _setupWings()
         return plots:FindFirstChild("Plot_"..LP.Name)
     end
 
+    -- Resolve a solid world CFrame for a part/model (avoids void from empty pivots)
+    local function getTargetCF(target)
+        if not target then return nil end
+        if target:IsA("BasePart") then return target.CFrame end
+        if target:IsA("Model") then
+            local pp=target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart",true)
+            if pp then return pp.CFrame end
+            local ok,cf=pcall(function() return target:GetPivot() end)
+            if ok then return cf end
+        end
+        return nil
+    end
+
+    local function tpToPart(target,yOff)
+        local hrp=getHRP(); if not hrp then notify("Wings: no character") return end
+        local cf=getTargetCF(target)
+        if not cf then notify("Wings: target has no position") return end
+        local p=cf.Position
+        -- void guard: huge zone parts can be centred off-map
+        if p.Y<-150 or math.abs(p.X)>50000 or math.abs(p.Z)>50000 then
+            notify("Wings: target is in the void ("..math.floor(p.X)..","..math.floor(p.Y)..","..math.floor(p.Z)..")")
+            return
+        end
+        hrp.CFrame=cf+Vector3.new(0,yOff or 5,0)
+    end
+
+    -- ── Brainrot helpers (defined early so teleports can use them) ──
+    local SUF={K=1e3,M=1e6,B=1e9,T=1e12,Q=1e15}
+    local function parseRate(s)
+        if not s then return 0 end
+        local num,suf=tostring(s):match("([%d%.]+)%s*([KkMmBbTtQq]?)")
+        if not num then return 0 end
+        local v=tonumber(num) or 0
+        suf=(suf or ""):upper()
+        if SUF[suf] then v=v*SUF[suf] end
+        return v
+    end
+    local function readRate(model)
+        local gui=model:FindFirstChild("InfoGUI"); if not gui then return 0,nil end
+        for _,g in ipairs(gui:GetDescendants()) do
+            if (g:IsA("TextLabel") or g:IsA("TextButton")) and g.Name=="Earnings" then
+                return parseRate(g.Text), g.Text
+            end
+        end
+        local best=0; local rateText=nil
+        for _,g in ipairs(gui:GetDescendants()) do
+            if (g:IsA("TextLabel") or g:IsA("TextButton")) and (g.Text:find("/s") or g.Text:find("[KMBTQ]")) then
+                local v=parseRate(g.Text)
+                if v>best then best=v; rateText=g.Text end
+            end
+        end
+        return best,rateText
+    end
+    local function getBrainrots()
+        local out={}
+        local spawners=workspace:FindFirstChild("ItemSpawners")
+        if not spawners then return out end
+        for _,d in ipairs(spawners:GetDescendants()) do
+            if d:IsA("Model") and d:FindFirstChild("InfoGUI") then
+                local rate,rateText=readRate(d)
+                table.insert(out,{model=d, name=d.Name, rate=rate, rateText=rateText})
+            end
+        end
+        table.sort(out,function(a,b) return a.rate>b.rate end)
+        return out
+    end
+
     -- Collect cash by firing a touch on every CollectTouch in the plot
     -- (no walking needed — firetouchinterest simulates the touch from anywhere)
     local COLLECT={Enabled=false, Delay=1.0}
@@ -3213,62 +3280,34 @@ local function _setupWings()
 
     makeDivider(WingsPage,"TELEPORT")
 
-    local function tpToPart(part,yOff)
-        local hrp=getHRP(); if not hrp then notify("Wings: no character") return end
-        if not part then notify("Wings: target not found") return end
-        local cf=part:IsA("BasePart") and part.CFrame or (part:IsA("Model") and part:GetPivot())
-        if not cf then notify("Wings: target has no position") return end
-        hrp.CFrame=cf+Vector3.new(0,yOff or 5,0)
-    end
-
-    makeButton(WingsPage,"TP → Last Zone (Collection End)",function()
-        tpToPart(workspace:FindFirstChild("COLLECTION_ZONE_END"),5)
-    end)
-    makeButton(WingsPage,"TP → Collection Start",function()
-        tpToPart(workspace:FindFirstChild("COLLECTION_ZONE_START"),5)
+    makeButton(WingsPage,"TP → Best Brainrot (Last Zone)",function()
+        local b=getBrainrots()
+        if #b==0 then notify("Wings: no brainrots found") return end
+        local top=b[1]
+        tpToPart(top.model,5)
+        notify("Wings: TP to "..top.name.." ("..(top.rateText or "?")..")")
     end)
     makeButton(WingsPage,"TP → My Plot",function()
         tpToPart(getPlot(),8)
     end)
-
-    makeDivider(WingsPage,"BRAINROTS")
-
-    -- Parse a rate string like "+1.3B/s" → number
-    local SUF={K=1e3,M=1e6,B=1e9,T=1e12,Q=1e15}
-    local function parseRate(s)
-        if not s then return 0 end
-        local num,suf=tostring(s):match("([%d%.]+)%s*([KkMmBbTtQq]?)")
-        if not num then return 0 end
-        local v=tonumber(num) or 0
-        suf=(suf or ""):upper()
-        if SUF[suf] then v=v*SUF[suf] end
-        return v
-    end
-
-    -- A brainrot = any Instance under ItemSpawners that has an "InfoGUI" child
-    local function getBrainrots()
-        local out={}
-        local spawners=workspace:FindFirstChild("ItemSpawners")
-        if not spawners then return out end
-        for _,d in ipairs(spawners:GetDescendants()) do
-            if d:FindFirstChild("InfoGUI") then
-                -- read the best $/s rate found in the InfoGUI text labels
-                local best=0; local rateText=nil
-                for _,g in ipairs(d.InfoGUI:GetDescendants()) do
-                    if g:IsA("TextLabel") or g:IsA("TextButton") then
-                        local t=g.Text or ""
-                        if t:find("/s") or t:find("[KMBTQ]") then
-                            local v=parseRate(t)
-                            if v>best then best=v; rateText=t end
-                        end
-                    end
-                end
-                table.insert(out,{model=d, name=d.Name, rate=best, rateText=rateText})
+    makeButton(WingsPage,"Debug: Zone Positions (F9)",function()
+        for _,n in ipairs({"COLLECTION_ZONE_START","COLLECTION_ZONE_END","GOD_BRAINROT_SPAWN"}) do
+            local part=workspace:FindFirstChild(n)
+            local cf=getTargetCF(part)
+            if cf then
+                local p=cf.Position
+                warn(string.format("[WINGS] %s = (%.1f, %.1f, %.1f) class=%s",n,p.X,p.Y,p.Z,part.ClassName))
+            else
+                warn("[WINGS] "..n.." = NOT FOUND or no position")
             end
         end
-        table.sort(out,function(a,b) return a.rate>b.rate end)
-        return out
-    end
+        local plot=getPlot()
+        local pcf=getTargetCF(plot)
+        if pcf then warn(string.format("[WINGS] My Plot = (%.1f, %.1f, %.1f)",pcf.Position.X,pcf.Position.Y,pcf.Position.Z)) end
+        notify("Wings: zone positions dumped to F9")
+    end)
+
+    makeDivider(WingsPage,"BRAINROTS")
 
     makeButton(WingsPage,"TP → Best Brainrot",function()
         local b=getBrainrots()
