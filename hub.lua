@@ -3331,30 +3331,35 @@ local function _setupWings()
         if not silent then notify(string.format("Wings: TP to %s [%s] (%s)",top.name,top.area,top.rateText or "?")) end
     end
 
-    -- TP to a named zone folder in ItemSpawners (forces streaming of brainrots there)
-    local function tpToZoneFolder(zoneName)
-        local spawners=workspace:FindFirstChild("ItemSpawners")
-        if not spawners then notify("Wings: ItemSpawners not found") return end
-        local folder=spawners:FindFirstChild(zoneName)
-        if not folder then notify("Wings: zone '"..zoneName.."' not found in ItemSpawners") return end
-        -- find any real part inside the folder to land on
-        for _,d in ipairs(folder:GetDescendants()) do
-            if d:IsA("BasePart") then
-                local p=d.Position
-                if p.Magnitude>10 and p.Y>-150 then
-                    local hrp=getHRP(); if not hrp then return end
-                    hrp.CFrame=d.CFrame+Vector3.new(0,5,0)
-                    notify("Wings: TP'd into "..zoneName.." zone — wait a sec for brainrots to stream in")
-                    return
+    -- TP to a zone using its workspace spawn marker (e.g. GOD_BRAINROT_SPAWN)
+    local function tpToZoneSpawn(zoneName)
+        local hrp=getHRP(); if not hrp then return end
+        -- try common marker name patterns
+        local candidates={
+            zoneName:upper().."_BRAINROT_SPAWN",
+            zoneName:upper().."_SPAWN",
+            zoneName:upper().."_ZONE",
+        }
+        for _,name in ipairs(candidates) do
+            local marker=workspace:FindFirstChild(name)
+            if marker then
+                local cf=getTargetCF(marker)
+                if cf then
+                    local p=cf.Position
+                    if p.Y>-150 and p.Magnitude>10 then
+                        hrp.CFrame=cf+Vector3.new(0,5,0)
+                        notify("Wings: TP'd to "..zoneName.." via "..name.." — wait ~2s then scan")
+                        return
+                    end
                 end
             end
         end
-        notify("Wings: '"..zoneName.."' folder has no loaded parts yet — try again in a moment")
+        notify("Wings: no spawn marker found for '"..zoneName.."' — check Debug: Zone Positions")
     end
 
     makeButton(WingsPage,"TP → Best Zone",function() tpToBestZone(false) end)
-    makeButton(WingsPage,"TP → God Zone",function() tpToZoneFolder("God") end)
-    makeButton(WingsPage,"TP → Secret Zone",function() tpToZoneFolder("Secret") end)
+    makeButton(WingsPage,"TP → God Zone",function() tpToZoneSpawn("God") end)
+    makeButton(WingsPage,"TP → Secret Zone",function() tpToZoneSpawn("Secret") end)
     makeButton(WingsPage,"TP → My Plot",function() tpToPart(getPlot(),8) end)
 
     local SPAWN_TP={Enabled=false}
