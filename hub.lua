@@ -3285,26 +3285,30 @@ local function _setupWings()
             makeButton(sf,"Debug: Plot Structure (F9)",function()
                 local plot=getPlot()
                 if not plot then notify("Wings: plot not found") return end
-                local pads=findCollectPads(plot)
-                warn("[WINGS] Plot: "..plot:GetFullName().."  | CollectTouch pads found: "..#pads)
-                for _,ct in ipairs(pads) do warn("   pad @ "..ct:GetFullName()) end
-                -- dump the full subtree of the first OCCUPIED slot (has VisualItem)
-                for _,floor in ipairs(plot:GetChildren()) do
-                    local slots=floor:FindFirstChild("Slots")
-                    if slots then
-                        for _,slot in ipairs(slots:GetChildren()) do
-                            if slot:FindFirstChild("VisualItem") then
-                                warn("[WINGS] Occupied slot subtree ("..floor.Name.."."..slot.Name.."):")
-                                for _,d in ipairs(slot:GetDescendants()) do
-                                    warn(string.format("     %s [%s]",d.Name,d.ClassName))
-                                end
-                                notify("Wings: dumped structure to F9 ("..#pads.." pads)")
-                                return
-                            end
-                        end
+                warn("[WINGS] ===== PLOT DUMP: "..plot:GetFullName().." =====")
+                -- any BasePart whose name hints at collection
+                local hits={}
+                for _,d in ipairs(plot:GetDescendants()) do
+                    local nl=d.Name:lower()
+                    if d:IsA("BasePart") and (nl:find("collect") or nl:find("touch") or nl:find("claim")) then
+                        table.insert(hits,d)
                     end
                 end
-                notify("Wings: "..#pads.." pads, no occupied slot found")
+                warn("[WINGS] collect-ish parts: "..#hits)
+                for _,d in ipairs(hits) do warn("   "..d:GetFullName().." ["..d.ClassName.."]") end
+                -- dump Floor1.Slot1 full subtree as a structure sample
+                local f1=plot:FindFirstChild("Floor1")
+                local s1=f1 and f1:FindFirstChild("Slots") and f1.Slots:FindFirstChild("Slot1")
+                if s1 then
+                    warn("[WINGS] Floor1.Slot1 subtree:")
+                    for _,d in ipairs(s1:GetDescendants()) do
+                        warn(string.format("     %s [%s]",d.Name,d.ClassName))
+                    end
+                end
+                -- top-level children of the plot (look for a central collect pad / Base)
+                warn("[WINGS] plot direct children:")
+                for _,d in ipairs(plot:GetChildren()) do warn("   "..d.Name.." ["..d.ClassName.."]") end
+                notify("Wings: full plot dump in F9")
             end)
         end
     )
