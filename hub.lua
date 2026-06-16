@@ -684,11 +684,11 @@ RunService:BindToRenderStep("SkullzzAB",Enum.RenderPriority.Last.Value,function(
                 aimPos=aimPos+vel*(AB.Prediction/60)
             end
             targetPrevPos=part.Position
-            -- Take camera control so Roblox's camera script can't fight us
-            if Camera.CameraType~=Enum.CameraType.Scriptable then
-                Camera.CameraType=Enum.CameraType.Scriptable
-            end
-            -- LookVector lerp: only rotates toward target, no position/roll drift
+            -- Override only the look direction. We run at RenderPriority.Last
+            -- (after Roblox's own camera step) so this write sticks WITHOUT
+            -- seizing CameraType=Scriptable — which is what caused the camera to
+            -- snap/glitch every time a target entered or left the FOV, and what
+            -- broke aiming when the mouse re-locked after closing the panel.
             local alpha=math.clamp(1-AB.Smoothness^(dt*60), 0.02, 1)
             local cf=Camera.CFrame
             local targetLV=(aimPos-cf.Position).Unit
@@ -716,7 +716,8 @@ RunService:BindToRenderStep("SkullzzAB",Enum.RenderPriority.Last.Value,function(
             else HitLabel.Visible=false end
         end
     else
-        -- Restore normal camera when not locked
+        -- No target: leave the camera completely alone so the player keeps
+        -- full normal mouse control (no Scriptable flip = no snap).
         if Camera.CameraType==Enum.CameraType.Scriptable then
             Camera.CameraType=origCamType
         end
