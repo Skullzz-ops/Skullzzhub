@@ -3206,8 +3206,8 @@ local function _setupWings()
         while n and n.Parent and n.Parent~=spawners do n=n.Parent end
         return n and n.Name or "?"
     end
-    -- tier rank: higher = grab first. God > Celestial > Legendary > Epic > Rare > rest
-    local TIER_RANK={["god"]=6,["celestial"]=5,["legendary"]=4,["epic"]=3,["rare"]=2,["uncommon"]=1,["common"]=0}
+    -- tier rank: higher = grab first. Secret > God > Celestial > Legendary > Epic > Rare > rest
+    local TIER_RANK={["secret"]=7,["god"]=6,["celestial"]=5,["legendary"]=4,["epic"]=3,["rare"]=2,["uncommon"]=1,["common"]=0}
     local function tierOf(area) return TIER_RANK[(area or ""):lower()] or 0 end
     -- returns the world position of a brainrot model, or nil if not positioned/loaded
     local function modelPos(model)
@@ -3331,7 +3331,30 @@ local function _setupWings()
         if not silent then notify(string.format("Wings: TP to %s [%s] (%s)",top.name,top.area,top.rateText or "?")) end
     end
 
+    -- TP to a named zone folder in ItemSpawners (forces streaming of brainrots there)
+    local function tpToZoneFolder(zoneName)
+        local spawners=workspace:FindFirstChild("ItemSpawners")
+        if not spawners then notify("Wings: ItemSpawners not found") return end
+        local folder=spawners:FindFirstChild(zoneName)
+        if not folder then notify("Wings: zone '"..zoneName.."' not found in ItemSpawners") return end
+        -- find any real part inside the folder to land on
+        for _,d in ipairs(folder:GetDescendants()) do
+            if d:IsA("BasePart") then
+                local p=d.Position
+                if p.Magnitude>10 and p.Y>-150 then
+                    local hrp=getHRP(); if not hrp then return end
+                    hrp.CFrame=d.CFrame+Vector3.new(0,5,0)
+                    notify("Wings: TP'd into "..zoneName.." zone — wait a sec for brainrots to stream in")
+                    return
+                end
+            end
+        end
+        notify("Wings: '"..zoneName.."' folder has no loaded parts yet — try again in a moment")
+    end
+
     makeButton(WingsPage,"TP → Best Zone",function() tpToBestZone(false) end)
+    makeButton(WingsPage,"TP → God Zone",function() tpToZoneFolder("God") end)
+    makeButton(WingsPage,"TP → Secret Zone",function() tpToZoneFolder("Secret") end)
     makeButton(WingsPage,"TP → My Plot",function() tpToPart(getPlot(),8) end)
 
     local SPAWN_TP={Enabled=false}
