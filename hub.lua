@@ -3151,6 +3151,73 @@ local function _setupNoob()
         return true
     end
 
+    -- ── Shared money + price helpers ──────────────────────
+    local SUF={K=1e3,M=1e6,B=1e9,T=1e12,Q=1e15}
+    local function parseNum(str)
+        if str==nil then return nil end
+        if type(str)=="number" then return str end
+        local s=tostring(str):gsub(",","")
+        local num,suf=s:match("([%d%.]+)%s*(%a*)")
+        if not num then return nil end
+        local v=tonumber(num); if not v then return nil end
+        suf=(suf or ""):upper()
+        if suf~="" and SUF[suf] then v=v*SUF[suf] end
+        return v
+    end
+    -- read current money from leaderstats / attributes (nil if unknown)
+    local function getCash()
+        local ls=LP:FindFirstChild("leaderstats")
+        if ls then
+            for _,v in ipairs(ls:GetChildren()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue") then
+                    local nm=v.Name:lower()
+                    if nm:find("cash") or nm:find("money") or nm:find("coin") or nm:find("dollar") or nm:find("balance") then
+                        return parseNum(v.Value)
+                    end
+                end
+            end
+        end
+        for _,nm in ipairs({"Cash","Money","Coins","Dollars","Balance","Currency"}) do
+            local ok,val=pcall(function() return LP:GetAttribute(nm) end)
+            if ok and val~=nil then local n=parseNum(val); if n then return n end end
+        end
+        return nil
+    end
+    -- find the price of an upgrade by searching PlayerGui for a node named keyName,
+    -- then reading a $ / price label in that node or its parent frame (nil if unknown)
+    local function findPriceFor(keyName)
+        local pg=LP:FindFirstChild("PlayerGui")
+        if not pg then return nil end
+        local node=nil
+        for _,d in ipairs(pg:GetDescendants()) do
+            if d.Name==keyName and d:IsA("GuiObject") then node=d; break end
+        end
+        if not node then return nil end
+        local scopes={node}
+        if node.Parent then table.insert(scopes,node.Parent) end
+        for _,scope in ipairs(scopes) do
+            for _,t in ipairs(scope:GetDescendants()) do
+                if t:IsA("TextLabel") or t:IsA("TextButton") then
+                    local txt=t.Text or ""
+                    local nm=t.Name:lower()
+                    if txt~="" and (txt:find("%$") or nm:find("price") or nm:find("cost")) then
+                        local v=parseNum(txt)
+                        if v and v>0 then return v end
+                    end
+                end
+            end
+        end
+        return nil
+    end
+    -- can we afford keyName?  true if affordable OR if price/cash can't be read (fail-open)
+    local function canAfford(keyName)
+        local cash=getCash()
+        if cash==nil then return true end          -- unknown cash → let server decide
+        local price=findPriceFor(keyName)
+        if price==nil then return true end          -- unknown price → let server decide
+        return cash>=price, cash, price
+    end
+
     -- ── Noob types to keep upgrading. Spam-fired; server only applies if affordable.
     local NOOB_NAMES={"Starter"}  -- add more here as you find them
 
@@ -3166,10 +3233,11 @@ local function _setupNoob()
     local noobTask=nil
     local function upgradeNoobsOnce(silent)
         if not getRemote() then if not silent then notify("Noob: __Net.MainRemote not found") end return end
+        local fired=0
         for _,n in ipairs(NOOB_NAMES) do
-            fire("UpgradeNoob", n)
+            if canAfford(n) then fire("UpgradeNoob", n); fired=fired+1 end
         end
-        if not silent then notify("Noob: pulsed "..#NOOB_NAMES.." noob upgrade(s)") end
+        if not silent then notify("Noob: fired "..fired.." of "..#NOOB_NAMES.." noob upgrade(s) (affordable only)") end
     end
     local function setAutoNoob(v)
         NOOB.Enabled=v
@@ -3198,10 +3266,11 @@ local function _setupNoob()
     local upgTask=nil
     local function upgradesOnce(silent)
         if not getRemote() then if not silent then notify("Noob: __Net.MainRemote not found") end return end
+        local fired=0
         for _,u in ipairs(UPGRADE_LIST) do
-            fire("UpgradeUpgrade", u[1], u[2])
+            if canAfford(u[2]) then fire("UpgradeUpgrade", u[1], u[2]); fired=fired+1 end
         end
-        if not silent then notify("Noob: pulsed "..#UPGRADE_LIST.." upgrade(s)") end
+        if not silent then notify("Noob: fired "..fired.." of "..#UPGRADE_LIST.." upgrade(s) (affordable only)") end
     end
     local function setAutoUpg(v)
         UPG.Enabled=v
@@ -3220,6 +3289,18 @@ local function _setupNoob()
         function(sf)
             makeSlider(sf,"Delay",0.1,3,UPG.Delay,0.1,"%.1f s",function(v) UPG.Delay=v end)
             makeButton(sf,"Upgrade All Once",function() upgradesOnce(false) end)
+            makeButton(sf,"Debug: Prices + Cash (F9)",function()
+                local cash=getCash()
+                warn("[NOOB] cash="..tostring(cash))
+                warn("[NOOB] detected prices (nil = couldn't read, fires anyway):")
+                for _,n in ipairs(NOOB_NAMES) do
+                    warn(string.format("   NOOB %s → price=%s",n,tostring(findPriceFor(n))))
+                end
+                for _,u in ipairs(UPGRADE_LIST) do
+                    warn(string.format("   UPG %s/%s → price=%s",u[1],u[2],tostring(findPriceFor(u[2]))))
+                end
+                notify("Noob: prices/cash dumped to F9")
+            end)
             makeButton(sf,"Debug: Dump __Net (F9)",function()
                 local net=RS:FindFirstChild("__Net")
                 if not net then notify("Noob: __Net not found") return end
@@ -3231,40 +3312,6 @@ local function _setupNoob()
     )
 
     makeDivider(NoobPage,"REBIRTH")
-
-    -- parse "1.2M" / "3,400" / "5K" → number
-    local SUF={K=1e3,M=1e6,B=1e9,T=1e12,Q=1e15,QU=1e15,SX=1e18}
-    local function parseNum(str)
-        if str==nil then return nil end
-        if type(str)=="number" then return str end
-        local s=tostring(str):gsub(",","")
-        local num,suf=s:match("([%d%.]+)%s*(%a*)")
-        if not num then return nil end
-        local v=tonumber(num); if not v then return nil end
-        suf=(suf or ""):upper()
-        if suf~="" and SUF[suf] then v=v*SUF[suf] end
-        return v
-    end
-
-    -- read current money from leaderstats / attributes
-    local function getCash()
-        local ls=LP:FindFirstChild("leaderstats")
-        if ls then
-            for _,v in ipairs(ls:GetChildren()) do
-                if v:IsA("NumberValue") or v:IsA("IntValue") then
-                    local nm=v.Name:lower()
-                    if nm:find("cash") or nm:find("money") or nm:find("coin") or nm:find("dollar") or nm:find("balance") or nm:find("noob") then
-                        return v.Value
-                    end
-                end
-            end
-        end
-        for _,nm in ipairs({"Cash","Money","Coins","Dollars","Balance","Currency"}) do
-            local ok,val=pcall(function() return LP:GetAttribute(nm) end)
-            if ok and type(val)=="number" then return val end
-        end
-        return nil -- unknown
-    end
 
     -- try to discover the rebirth cost from leaderstats / attributes
     local function getRebirthCost()
