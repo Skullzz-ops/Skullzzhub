@@ -3420,14 +3420,19 @@ local function _setupNoob()
         if REBIRTH.UseCost then need=getRebirthCost() end
         if need==nil then need=REBIRTH.MinMoney end
         -- money check before firing
-        if cash~=nil and cash<need then
-            if not silent then notify(string.format("Noob: skip rebirth — have %.0f, need %.0f",cash,need)) end
+        if cash~=nil and need and cash<need then
+            if not silent then
+                warn(string.format("[NOOB] SKIP rebirth — cash=%.0f < need=%.0f",cash,need))
+                notify(string.format("Noob: skip rebirth — have %.0f, need %.0f",cash,need))
+            end
             return false
         end
         fire("Rebirth")
         if not silent then
+            warn(string.format("[NOOB] FIRED Rebirth | cash=%s need=%s (UseCost=%s)",
+                tostring(cash), tostring(need), tostring(REBIRTH.UseCost)))
             notify(string.format("Noob: fired Rebirth (cash %s / need %s)",
-                cash and string.format("%.0f",cash) or "?", need>0 and string.format("%.0f",need) or "any"))
+                cash and string.format("%.0f",cash) or "?", (need and need>0) and string.format("%.0f",need) or "any"))
         end
         return true
     end
