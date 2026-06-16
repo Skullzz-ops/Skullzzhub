@@ -3375,11 +3375,19 @@ local function _setupWings()
     makeButton(WingsPage,"Scan Brainrots (F9)",function()
         local all=getBrainrots(false)
         local loaded=getBrainrots(true)
+        -- print unique areas + their resolved tier rank so we can fix TIER_RANK if needed
+        local seen={}
+        for _,v in ipairs(all) do
+            if not seen[v.area] then
+                seen[v.area]=true
+                warn(string.format("[WINGS] AREA %q → tier=%d",v.area,tierOf(v.area)))
+            end
+        end
         warn(string.format("[WINGS] %d total brainrots, %d loaded/positioned:",#all,#loaded))
         for i,v in ipairs(loaded) do
             local p=v.pos
-            warn(string.format("  [%d] %s [%s] | %s | pos=(%.0f,%.0f,%.0f)",
-                i, v.name, v.area, tostring(v.rateText), p.X,p.Y,p.Z))
+            warn(string.format("  [%d] %s [%s] tier=%d | %s | pos=(%.0f,%.0f,%.0f)",
+                i, v.name, v.area, tierOf(v.area), tostring(v.rateText), p.X,p.Y,p.Z))
         end
         notify(string.format("Wings: %d loaded of %d total — see F9",#loaded,#all))
     end)
