@@ -3323,16 +3323,36 @@ local function _setupWings()
 
     makeDivider(WingsPage,"TELEPORT")
 
-    makeButton(WingsPage,"TP → Best Brainrot (Last Zone)",function()
-        local b=getBrainrots(true)  -- loaded/positioned only
-        if #b==0 then notify("Wings: no loaded brainrots found") return end
+    local function tpToBestZone(silent)
+        local b=getBrainrots(true)
+        if #b==0 then if not silent then notify("Wings: no loaded brainrots found") end return end
         local top=b[1]
         tpToPart(top.model,5)
-        notify(string.format("Wings: TP to %s [%s] (%s)",top.name,top.area,top.rateText or "?"))
-    end)
-    makeButton(WingsPage,"TP → My Plot",function()
-        tpToPart(getPlot(),8)
-    end)
+        if not silent then notify(string.format("Wings: TP to %s [%s] (%s)",top.name,top.area,top.rateText or "?")) end
+    end
+
+    makeButton(WingsPage,"TP → Best Zone",function() tpToBestZone(false) end)
+    makeButton(WingsPage,"TP → My Plot",function() tpToPart(getPlot(),8) end)
+
+    local SPAWN_TP={Enabled=false}
+    local spawnConn=nil
+    local function setAutoSpawnTP(v)
+        SPAWN_TP.Enabled=v
+        if spawnConn then spawnConn:Disconnect(); spawnConn=nil end
+        if v then
+            spawnConn=LP.CharacterAdded:Connect(function()
+                task.wait(1.5) -- let world load
+                if SPAWN_TP.Enabled then tpToBestZone(false) end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setAutoSpawnTP(false) end)
+
+    makeModCard(WingsPage,"Auto TP to Best Zone on Spawn",SPAWN_TP,"Enabled",
+        function(v) setAutoSpawnTP(v) end,
+        "Every time your character loads in, waits 1.5s then warps you to the highest-tier zone (God > Celestial > Legendary).",
+        nil
+    )
     makeButton(WingsPage,"Debug: Zone Positions (F9)",function()
         for _,n in ipairs({"COLLECTION_ZONE_START","COLLECTION_ZONE_END","GOD_BRAINROT_SPAWN"}) do
             local part=workspace:FindFirstChild(n)
