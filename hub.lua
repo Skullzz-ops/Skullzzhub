@@ -1277,6 +1277,26 @@ local function makeSlider(parent,label,min,max,default,step,fmt,onChange,lo)
     end)
 end
 
+-- Text input row: user types a value (e.g. "10k", "100m", "10b").
+-- onChange receives the raw string on FocusLost; caller parses it.
+local function makeTextInput(parent,label,default,placeholder,onChange,lo)
+    local row=Instance.new("Frame"); row.Size=UDim2.new(1,0,0,28)
+    row.BackgroundTransparency=1; row.LayoutOrder=lo or O(); row.Parent=parent
+    local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(0.5,-4,1,0)
+    lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(160,160,195)
+    lbl.TextSize=11; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Parent=row
+    local box=Instance.new("TextBox"); box.Size=UDim2.new(0.5,0,0,22)
+    box.Position=UDim2.new(0.5,0,0.5,-11); box.BackgroundColor3=MID
+    box.Text=default or ""; box.PlaceholderText=placeholder or ""
+    box.PlaceholderColor3=Color3.fromRGB(110,110,140)
+    box.TextColor3=WHITE; box.TextSize=11; box.Font=Enum.Font.GothamBold
+    box.ClearTextOnFocus=false; box.BorderSizePixel=0; box.Parent=row
+    Instance.new("UICorner",box).CornerRadius=UDim.new(0,4)
+    local st=Instance.new("UIStroke"); st.Color=ACCENT; st.Thickness=1; st.Transparency=0.6; st.Parent=box
+    box.FocusLost:Connect(function() onChange(box.Text) end)
+    return box
+end
+
 local function makeColorRow(parent,label,presets,onChange,lo)
     local row=Instance.new("Frame"); row.Size=UDim2.new(1,0,0,46)
     row.BackgroundTransparency=1; row.LayoutOrder=lo or O(); row.Parent=parent
@@ -3424,11 +3444,15 @@ local function _setupNoob()
 
     makeModCard(NoobPage,"Auto Rebirth",REBIRTH,"Enabled",
         function(v) setAutoRebirth(v) end,
-        "Fires Rebirth on a loop, but only when your money meets the requirement. Auto-detects the rebirth cost if the game exposes it; otherwise uses the Min Money slider below.",
+        "Fires Rebirth on a loop, but only when your money meets the requirement. Auto-detects the rebirth cost if the game exposes it; otherwise uses the Min Money you type below (supports 10k, 100m, 10b).",
         function(sf)
             makeSlider(sf,"Delay",0.5,10,REBIRTH.Delay,0.5,"%.1f s",function(v) REBIRTH.Delay=v end)
             makeToggle(sf,"Use Detected Rebirth Cost",REBIRTH.UseCost,function(v) REBIRTH.UseCost=v end)
-            makeSlider(sf,"Min Money (if cost unknown)",0,1e9,REBIRTH.MinMoney,1e6,"%.0f",function(v) REBIRTH.MinMoney=v end)
+            makeTextInput(sf,"Min Money","","e.g. 10k 100m 10b",function(txt)
+                local n=parseNum(txt)
+                REBIRTH.MinMoney=n or 0
+                notify("Noob: min money set to "..string.format("%.0f",REBIRTH.MinMoney))
+            end)
             makeButton(sf,"Rebirth Once",function() rebirthOnce(false) end)
             makeButton(sf,"Debug: Money + Cost (F9)",function()
                 local cash=getCash()
