@@ -3229,6 +3229,120 @@ local function _setupNoob()
             end)
         end
     )
+
+    makeDivider(NoobPage,"REBIRTH")
+
+    -- parse "1.2M" / "3,400" / "5K" → number
+    local SUF={K=1e3,M=1e6,B=1e9,T=1e12,Q=1e15,QU=1e15,SX=1e18}
+    local function parseNum(str)
+        if str==nil then return nil end
+        if type(str)=="number" then return str end
+        local s=tostring(str):gsub(",","")
+        local num,suf=s:match("([%d%.]+)%s*(%a*)")
+        if not num then return nil end
+        local v=tonumber(num); if not v then return nil end
+        suf=(suf or ""):upper()
+        if suf~="" and SUF[suf] then v=v*SUF[suf] end
+        return v
+    end
+
+    -- read current money from leaderstats / attributes
+    local function getCash()
+        local ls=LP:FindFirstChild("leaderstats")
+        if ls then
+            for _,v in ipairs(ls:GetChildren()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") then
+                    local nm=v.Name:lower()
+                    if nm:find("cash") or nm:find("money") or nm:find("coin") or nm:find("dollar") or nm:find("balance") or nm:find("noob") then
+                        return v.Value
+                    end
+                end
+            end
+        end
+        for _,nm in ipairs({"Cash","Money","Coins","Dollars","Balance","Currency"}) do
+            local ok,val=pcall(function() return LP:GetAttribute(nm) end)
+            if ok and type(val)=="number" then return val end
+        end
+        return nil -- unknown
+    end
+
+    -- try to discover the rebirth cost from leaderstats / attributes
+    local function getRebirthCost()
+        local ls=LP:FindFirstChild("leaderstats")
+        if ls then
+            for _,v in ipairs(ls:GetChildren()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue") then
+                    local nm=v.Name:lower()
+                    if nm:find("rebirth") and (nm:find("cost") or nm:find("price") or nm:find("req") or nm:find("next")) then
+                        return parseNum(v.Value)
+                    end
+                end
+            end
+        end
+        for _,nm in ipairs({"RebirthCost","NextRebirth","RebirthPrice","RebirthReq","RebirthRequirement"}) do
+            local ok,val=pcall(function() return LP:GetAttribute(nm) end)
+            if ok and val~=nil then local n=parseNum(val); if n then return n end end
+        end
+        return nil -- unknown
+    end
+
+    local REBIRTH={Enabled=false, Delay=2.0, MinMoney=0, UseCost=true}
+    local rbTask=nil
+    local function rebirthOnce(silent)
+        if not getRemote() then if not silent then notify("Noob: __Net.MainRemote not found") end return false end
+        local cash=getCash()
+        -- decide the threshold: discovered rebirth cost (preferred) or the manual MinMoney
+        local need=nil
+        if REBIRTH.UseCost then need=getRebirthCost() end
+        if need==nil then need=REBIRTH.MinMoney end
+        -- money check before firing
+        if cash~=nil and cash<need then
+            if not silent then notify(string.format("Noob: skip rebirth — have %.0f, need %.0f",cash,need)) end
+            return false
+        end
+        fire("Rebirth")
+        if not silent then
+            notify(string.format("Noob: fired Rebirth (cash %s / need %s)",
+                cash and string.format("%.0f",cash) or "?", need>0 and string.format("%.0f",need) or "any"))
+        end
+        return true
+    end
+    local function setAutoRebirth(v)
+        REBIRTH.Enabled=v
+        if rbTask then task.cancel(rbTask); rbTask=nil end
+        if v then
+            rbTask=task.spawn(function()
+                while REBIRTH.Enabled do rebirthOnce(true); task.wait(REBIRTH.Delay) end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setAutoRebirth(false) end)
+
+    makeModCard(NoobPage,"Auto Rebirth",REBIRTH,"Enabled",
+        function(v) setAutoRebirth(v) end,
+        "Fires Rebirth on a loop, but only when your money meets the requirement. Auto-detects the rebirth cost if the game exposes it; otherwise uses the Min Money slider below.",
+        function(sf)
+            makeSlider(sf,"Delay",0.5,10,REBIRTH.Delay,0.5,"%.1f s",function(v) REBIRTH.Delay=v end)
+            makeToggle(sf,"Use Detected Rebirth Cost",REBIRTH.UseCost,function(v) REBIRTH.UseCost=v end)
+            makeSlider(sf,"Min Money (if cost unknown)",0,1e9,REBIRTH.MinMoney,1e6,"%.0f",function(v) REBIRTH.MinMoney=v end)
+            makeButton(sf,"Rebirth Once",function() rebirthOnce(false) end)
+            makeButton(sf,"Debug: Money + Cost (F9)",function()
+                local cash=getCash()
+                local cost=getRebirthCost()
+                warn("[NOOB] cash="..tostring(cash).."  detectedRebirthCost="..tostring(cost))
+                local ls=LP:FindFirstChild("leaderstats")
+                if ls then
+                    warn("[NOOB] leaderstats:")
+                    for _,v in ipairs(ls:GetChildren()) do
+                        warn(string.format("   %s [%s] = %s",v.Name,v.ClassName,tostring(v.Value)))
+                    end
+                else
+                    warn("[NOOB] no leaderstats found")
+                end
+                notify("Noob: money/cost dumped to F9 — cash="..tostring(cash))
+            end)
+        end
+    )
 end
 _setupNoob()
 
