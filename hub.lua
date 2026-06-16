@@ -3136,6 +3136,100 @@ _setupLemons()
 -- ── 🪽 +1 WINGS FOR BRAINROT ────────────────────────────
 local function _setupWings()
     makeDivider(WingsPage,"+1 WINGS FOR BRAINROT")
+
+    local function getHRP()
+        local c=LP.Character; return c and c:FindFirstChild("HumanoidRootPart")
+    end
+
+    -- Find this player's plot:  workspace.Plots.Plot_<username>
+    local function getPlot()
+        local plots=workspace:FindFirstChild("Plots"); if not plots then return nil end
+        return plots:FindFirstChild("Plot_"..LP.Name)
+    end
+
+    -- Collect cash by firing a touch on every CollectTouch in the plot
+    -- (no walking needed — firetouchinterest simulates the touch from anywhere)
+    local COLLECT={Enabled=false, Delay=1.0}
+    local collectTask=nil
+    local function collectCashOnce(silent)
+        local plot=getPlot()
+        if not plot then if not silent then notify("Wings: plot not found") end return end
+        local hrp=getHRP()
+        if not hrp then if not silent then notify("Wings: no character") end return end
+        if not firetouchinterest then if not silent then notify("Wings: executor lacks firetouchinterest") end return end
+        local n=0
+        for _,floor in ipairs(plot:GetChildren()) do
+            local slots=floor:FindFirstChild("Slots")
+            if slots then
+                for _,slot in ipairs(slots:GetChildren()) do
+                    local ct=slot:FindFirstChild("CollectTouch")
+                    if ct and ct:IsA("BasePart") then
+                        pcall(function()
+                            firetouchinterest(hrp,ct,0)
+                            firetouchinterest(hrp,ct,1)
+                        end)
+                        n=n+1
+                    end
+                end
+            end
+        end
+        if not silent then notify("Wings: pulsed "..n.." collect pads") end
+    end
+    local function setAutoCollect(v)
+        COLLECT.Enabled=v
+        if collectTask then task.cancel(collectTask); collectTask=nil end
+        if v then
+            collectTask=task.spawn(function()
+                while COLLECT.Enabled do collectCashOnce(true); task.wait(COLLECT.Delay) end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setAutoCollect(false) end)
+
+    makeModCard(WingsPage,"Auto Collect Cash",COLLECT,"Enabled",
+        function(v) setAutoCollect(v) end,
+        "Fires a touch on every CollectTouch pad in your plot so cash collects without walking there. Works from anywhere.",
+        function(sf)
+            makeSlider(sf,"Delay",0.3,5,COLLECT.Delay,0.1,"%.1f s",
+                function(v) COLLECT.Delay=v end)
+            makeButton(sf,"Collect Once",function() collectCashOnce(false) end)
+            makeButton(sf,"Debug: List Plot Slots (F9)",function()
+                local plot=getPlot()
+                if not plot then notify("Wings: plot not found") return end
+                warn("[WINGS] Plot: "..plot:GetFullName())
+                for _,floor in ipairs(plot:GetChildren()) do
+                    local slots=floor:FindFirstChild("Slots")
+                    if slots then
+                        for _,slot in ipairs(slots:GetChildren()) do
+                            local ct=slot:FindFirstChild("CollectTouch")
+                            warn(string.format("  %s.%s  CollectTouch=%s",floor.Name,slot.Name,tostring(ct~=nil)))
+                        end
+                    end
+                end
+                notify("Wings: dumped plot slots to F9")
+            end)
+        end
+    )
+
+    makeDivider(WingsPage,"TELEPORT")
+
+    local function tpToPart(part,yOff)
+        local hrp=getHRP(); if not hrp then notify("Wings: no character") return end
+        if not part then notify("Wings: target not found") return end
+        local cf=part:IsA("BasePart") and part.CFrame or (part:IsA("Model") and part:GetPivot())
+        if not cf then notify("Wings: target has no position") return end
+        hrp.CFrame=cf+Vector3.new(0,yOff or 5,0)
+    end
+
+    makeButton(WingsPage,"TP → Last Zone (Collection End)",function()
+        tpToPart(workspace:FindFirstChild("COLLECTION_ZONE_END"),5)
+    end)
+    makeButton(WingsPage,"TP → Collection Start",function()
+        tpToPart(workspace:FindFirstChild("COLLECTION_ZONE_START"),5)
+    end)
+    makeButton(WingsPage,"TP → My Plot",function()
+        tpToPart(getPlot(),8)
+    end)
 end
 _setupWings()
 
