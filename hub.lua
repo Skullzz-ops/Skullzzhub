@@ -3200,14 +3200,35 @@ local function _setupWings()
         end
         return best,rateText
     end
-    local function getBrainrots()
+    -- area = the folder directly under ItemSpawners (God / Legendary / Epic / ...)
+    local function areaOf(model,spawners)
+        local n=model
+        while n and n.Parent and n.Parent~=spawners do n=n.Parent end
+        return n and n.Name or "?"
+    end
+    -- returns the world position of a brainrot model, or nil if not positioned/loaded
+    local function modelPos(model)
+        local pp=model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart",true)
+        if not pp then return nil end
+        local p=pp.Position
+        if p.Magnitude<10 then return nil end          -- at origin = not loaded
+        if p.Y<-150 then return nil end                -- void
+        return p,pp
+    end
+    -- onlyLoaded: skip brainrots with no rate or no valid position
+    local function getBrainrots(onlyLoaded)
         local out={}
         local spawners=workspace:FindFirstChild("ItemSpawners")
         if not spawners then return out end
         for _,d in ipairs(spawners:GetDescendants()) do
             if d:IsA("Model") and d:FindFirstChild("InfoGUI") then
                 local rate,rateText=readRate(d)
-                table.insert(out,{model=d, name=d.Name, rate=rate, rateText=rateText})
+                local pos,part=modelPos(d)
+                local ok = (not onlyLoaded) or (rate>0 and pos~=nil)
+                if ok then
+                    table.insert(out,{model=d, name=d.Name, rate=rate, rateText=rateText,
+                        pos=pos, part=part, area=areaOf(d,spawners)})
+                end
             end
         end
         table.sort(out,function(a,b) return a.rate>b.rate end)
@@ -3218,29 +3239,30 @@ local function _setupWings()
     -- (no walking needed — firetouchinterest simulates the touch from anywhere)
     local COLLECT={Enabled=false, Delay=1.0}
     local collectTask=nil
+    -- find every CollectTouch BasePart anywhere inside the plot (deep search)
+    local function findCollectPads(plot)
+        local pads={}
+        for _,d in ipairs(plot:GetDescendants()) do
+            if d:IsA("BasePart") and d.Name=="CollectTouch" then
+                table.insert(pads,d)
+            end
+        end
+        return pads
+    end
     local function collectCashOnce(silent)
         local plot=getPlot()
         if not plot then if not silent then notify("Wings: plot not found") end return end
         local hrp=getHRP()
         if not hrp then if not silent then notify("Wings: no character") end return end
         if not firetouchinterest then if not silent then notify("Wings: executor lacks firetouchinterest") end return end
-        local n=0
-        for _,floor in ipairs(plot:GetChildren()) do
-            local slots=floor:FindFirstChild("Slots")
-            if slots then
-                for _,slot in ipairs(slots:GetChildren()) do
-                    local ct=slot:FindFirstChild("CollectTouch")
-                    if ct and ct:IsA("BasePart") then
-                        pcall(function()
-                            firetouchinterest(hrp,ct,0)
-                            firetouchinterest(hrp,ct,1)
-                        end)
-                        n=n+1
-                    end
-                end
-            end
+        local pads=findCollectPads(plot)
+        for _,ct in ipairs(pads) do
+            pcall(function()
+                firetouchinterest(hrp,ct,0)
+                firetouchinterest(hrp,ct,1)
+            end)
         end
-        if not silent then notify("Wings: pulsed "..n.." collect pads") end
+        if not silent then notify("Wings: pulsed "..#pads.." collect pads") end
     end
     local function setAutoCollect(v)
         COLLECT.Enabled=v
@@ -3260,20 +3282,29 @@ local function _setupWings()
             makeSlider(sf,"Delay",0.3,5,COLLECT.Delay,0.1,"%.1f s",
                 function(v) COLLECT.Delay=v end)
             makeButton(sf,"Collect Once",function() collectCashOnce(false) end)
-            makeButton(sf,"Debug: List Plot Slots (F9)",function()
+            makeButton(sf,"Debug: Plot Structure (F9)",function()
                 local plot=getPlot()
                 if not plot then notify("Wings: plot not found") return end
-                warn("[WINGS] Plot: "..plot:GetFullName())
+                local pads=findCollectPads(plot)
+                warn("[WINGS] Plot: "..plot:GetFullName().."  | CollectTouch pads found: "..#pads)
+                for _,ct in ipairs(pads) do warn("   pad @ "..ct:GetFullName()) end
+                -- dump the full subtree of the first OCCUPIED slot (has VisualItem)
                 for _,floor in ipairs(plot:GetChildren()) do
                     local slots=floor:FindFirstChild("Slots")
                     if slots then
                         for _,slot in ipairs(slots:GetChildren()) do
-                            local ct=slot:FindFirstChild("CollectTouch")
-                            warn(string.format("  %s.%s  CollectTouch=%s",floor.Name,slot.Name,tostring(ct~=nil)))
+                            if slot:FindFirstChild("VisualItem") then
+                                warn("[WINGS] Occupied slot subtree ("..floor.Name.."."..slot.Name.."):")
+                                for _,d in ipairs(slot:GetDescendants()) do
+                                    warn(string.format("     %s [%s]",d.Name,d.ClassName))
+                                end
+                                notify("Wings: dumped structure to F9 ("..#pads.." pads)")
+                                return
+                            end
                         end
                     end
                 end
-                notify("Wings: dumped plot slots to F9")
+                notify("Wings: "..#pads.." pads, no occupied slot found")
             end)
         end
     )
@@ -3281,11 +3312,11 @@ local function _setupWings()
     makeDivider(WingsPage,"TELEPORT")
 
     makeButton(WingsPage,"TP → Best Brainrot (Last Zone)",function()
-        local b=getBrainrots()
-        if #b==0 then notify("Wings: no brainrots found") return end
+        local b=getBrainrots(true)  -- loaded/positioned only
+        if #b==0 then notify("Wings: no loaded brainrots found") return end
         local top=b[1]
         tpToPart(top.model,5)
-        notify("Wings: TP to "..top.name.." ("..(top.rateText or "?")..")")
+        notify(string.format("Wings: TP to %s [%s] (%s)",top.name,top.area,top.rateText or "?"))
     end)
     makeButton(WingsPage,"TP → My Plot",function()
         tpToPart(getPlot(),8)
@@ -3309,30 +3340,16 @@ local function _setupWings()
 
     makeDivider(WingsPage,"BRAINROTS")
 
-    makeButton(WingsPage,"TP → Best Brainrot",function()
-        local b=getBrainrots()
-        if #b==0 then notify("Wings: no brainrots found") return end
-        local top=b[1]
-        tpToPart(top.model,5)
-        notify("Wings: TP to "..top.name.." ("..(top.rateText or "?")..")")
-    end)
     makeButton(WingsPage,"Scan Brainrots (F9)",function()
-        local b=getBrainrots()
-        warn("[WINGS] Found "..#b.." brainrots in ItemSpawners:")
-        for i,v in ipairs(b) do
-            warn(string.format("  [%d] %s | rate=%s (%s) | @ %s",
-                i, v.name, tostring(v.rate), tostring(v.rateText), v.model:GetFullName()))
+        local all=getBrainrots(false)
+        local loaded=getBrainrots(true)
+        warn(string.format("[WINGS] %d total brainrots, %d loaded/positioned:",#all,#loaded))
+        for i,v in ipairs(loaded) do
+            local p=v.pos
+            warn(string.format("  [%d] %s [%s] | %s | pos=(%.0f,%.0f,%.0f)",
+                i, v.name, v.area, tostring(v.rateText), p.X,p.Y,p.Z))
         end
-        -- also dump the InfoGUI structure of the first one so we can verify rate parsing
-        if b[1] then
-            warn("[WINGS] InfoGUI structure of '"..b[1].name.."':")
-            for _,g in ipairs(b[1].model.InfoGUI:GetDescendants()) do
-                if g:IsA("TextLabel") or g:IsA("TextButton") then
-                    warn(string.format("    %s = %q",g.Name,g.Text))
-                end
-            end
-        end
-        notify("Wings: dumped "..#b.." brainrots to F9")
+        notify(string.format("Wings: %d loaded of %d total — see F9",#loaded,#all))
     end)
 end
 _setupWings()
