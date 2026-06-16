@@ -3200,12 +3200,15 @@ local function _setupWings()
         end
         return best,rateText
     end
-    -- area = the folder directly under ItemSpawners (God / Legendary / Epic / ...)
+    -- area = the folder directly under ItemSpawners (God / Celestial / Legendary / Epic / ...)
     local function areaOf(model,spawners)
         local n=model
         while n and n.Parent and n.Parent~=spawners do n=n.Parent end
         return n and n.Name or "?"
     end
+    -- tier rank: higher = grab first. God > Celestial > Legendary > Epic > Rare > rest
+    local TIER_RANK={["god"]=6,["celestial"]=5,["legendary"]=4,["epic"]=3,["rare"]=2,["uncommon"]=1,["common"]=0}
+    local function tierOf(area) return TIER_RANK[(area or ""):lower()] or 0 end
     -- returns the world position of a brainrot model, or nil if not positioned/loaded
     local function modelPos(model)
         local pp=model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart",true)
@@ -3231,7 +3234,12 @@ local function _setupWings()
                 end
             end
         end
-        table.sort(out,function(a,b) return a.rate>b.rate end)
+        -- sort by tier first (God > Celestial > Legendary > ...), then rate within tier
+        table.sort(out,function(a,b)
+            local ta,tb=tierOf(a.area),tierOf(b.area)
+            if ta~=tb then return ta>tb end
+            return a.rate>b.rate
+        end)
         return out
     end
 
