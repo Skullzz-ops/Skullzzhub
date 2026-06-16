@@ -3136,6 +3136,99 @@ _setupLemons()
 -- ── 🟢 NOOB INCREMENTAL ────────────────────────────────
 local function _setupNoob()
     makeDivider(NoobPage,"NOOB INCREMENTAL")
+
+    local RS=game:GetService("ReplicatedStorage")
+    -- the one remote the game routes everything through
+    local function getRemote()
+        local net=RS:FindFirstChild("__Net")
+        return net and net:FindFirstChild("MainRemote")
+    end
+    local function fire(...)
+        local r=getRemote()
+        if not r then return false end
+        local args={...}
+        pcall(function() r:FireServer(unpack(args)) end)
+        return true
+    end
+
+    -- ── Noob types to keep upgrading. Spam-fired; server only applies if affordable.
+    local NOOB_NAMES={"Starter"}  -- add more here as you find them
+
+    -- ── Upgrade pairs:  {category, name}
+    local UPGRADE_LIST={
+        {"Oof","MoreOof"},
+        {"Oof","FasterNoobs"},
+        -- add more {category, name} pairs here as you find them
+    }
+
+    -- ───────────────── AUTO UPGRADE NOOB ─────────────────
+    local NOOB={Enabled=false, Delay=0.3}
+    local noobTask=nil
+    local function upgradeNoobsOnce(silent)
+        if not getRemote() then if not silent then notify("Noob: __Net.MainRemote not found") end return end
+        for _,n in ipairs(NOOB_NAMES) do
+            fire("UpgradeNoob", n)
+        end
+        if not silent then notify("Noob: pulsed "..#NOOB_NAMES.." noob upgrade(s)") end
+    end
+    local function setAutoNoob(v)
+        NOOB.Enabled=v
+        if noobTask then task.cancel(noobTask); noobTask=nil end
+        if v then
+            noobTask=task.spawn(function()
+                while NOOB.Enabled do upgradeNoobsOnce(true); task.wait(NOOB.Delay) end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setAutoNoob(false) end)
+
+    makeModCard(NoobPage,"Auto Upgrade Noob",NOOB,"Enabled",
+        function(v) setAutoNoob(v) end,
+        "Spam-fires UpgradeNoob for every noob type on a loop. The server only applies it when you can afford it, so it auto-buys as fast as your cash allows.",
+        function(sf)
+            makeSlider(sf,"Delay",0.1,3,NOOB.Delay,0.1,"%.1f s",function(v) NOOB.Delay=v end)
+            makeButton(sf,"Upgrade Noob Once",function() upgradeNoobsOnce(false) end)
+        end
+    )
+
+    makeDivider(NoobPage,"UPGRADES")
+
+    -- ───────────────── AUTO UPGRADE (upgrades) ─────────────────
+    local UPG={Enabled=false, Delay=0.3}
+    local upgTask=nil
+    local function upgradesOnce(silent)
+        if not getRemote() then if not silent then notify("Noob: __Net.MainRemote not found") end return end
+        for _,u in ipairs(UPGRADE_LIST) do
+            fire("UpgradeUpgrade", u[1], u[2])
+        end
+        if not silent then notify("Noob: pulsed "..#UPGRADE_LIST.." upgrade(s)") end
+    end
+    local function setAutoUpg(v)
+        UPG.Enabled=v
+        if upgTask then task.cancel(upgTask); upgTask=nil end
+        if v then
+            upgTask=task.spawn(function()
+                while UPG.Enabled do upgradesOnce(true); task.wait(UPG.Delay) end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setAutoUpg(false) end)
+
+    makeModCard(NoobPage,"Auto Upgrade Upgrades",UPG,"Enabled",
+        function(v) setAutoUpg(v) end,
+        "Spam-fires UpgradeUpgrade for every known upgrade on a loop. Server only applies affordable ones. Add more upgrade names in UPGRADE_LIST.",
+        function(sf)
+            makeSlider(sf,"Delay",0.1,3,UPG.Delay,0.1,"%.1f s",function(v) UPG.Delay=v end)
+            makeButton(sf,"Upgrade All Once",function() upgradesOnce(false) end)
+            makeButton(sf,"Debug: Dump __Net (F9)",function()
+                local net=RS:FindFirstChild("__Net")
+                if not net then notify("Noob: __Net not found") return end
+                warn("[NOOB] __Net children:")
+                for _,d in ipairs(net:GetChildren()) do warn("   "..d.Name.." ["..d.ClassName.."]") end
+                notify("Noob: __Net dumped to F9")
+            end)
+        end
+    )
 end
 _setupNoob()
 
