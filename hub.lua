@@ -3355,6 +3355,92 @@ local function _setupWings()
         end
         notify(string.format("Wings: %d loaded of %d total — see F9",#loaded,#all))
     end)
+
+    makeDivider(WingsPage,"AUTO GRAB")
+
+    local function getAllPrompts()
+        local out={}
+        for _,d in ipairs(workspace:GetDescendants()) do
+            if d:IsA("ProximityPrompt") then table.insert(out,d) end
+        end
+        return out
+    end
+    -- find the ProximityPrompt for a brainrot: prefer one inside the model,
+    -- else the nearest prompt in the workspace to the model's position
+    local function promptForBrainrot(entry)
+        local p=entry.model:FindFirstChildWhichIsA("ProximityPrompt",true)
+        if p then return p,0 end
+        if not entry.pos then return nil end
+        local best,bestD=nil,1e9
+        for _,pr in ipairs(getAllPrompts()) do
+            local par=pr.Parent
+            if par and par:IsA("BasePart") then
+                local d=(par.Position-entry.pos).Magnitude
+                if d<bestD then bestD=d; best=pr end
+            end
+        end
+        return best,bestD
+    end
+
+    local function grabBestOnce(silent)
+        if not fireproximityprompt then
+            if not silent then notify("Wings: executor lacks fireproximityprompt") end return false
+        end
+        local b=getBrainrots(true)
+        if #b==0 then if not silent then notify("Wings: no loaded brainrots") end return false end
+        local top=b[1]
+        tpToPart(top.model,3)
+        task.wait(0.2)
+        local pr,dist=promptForBrainrot(top)
+        if not pr then if not silent then notify("Wings: no prompt for "..top.name) end return false end
+        pcall(function() fireproximityprompt(pr) end)
+        if not silent then notify(string.format("Wings: grabbed %s (prompt %.0f away)",top.name,dist or 0)) end
+        return true
+    end
+
+    local GRAB={Enabled=false, Delay=1.0, ReturnToPlot=true}
+    local grabTask=nil
+    local function setAutoGrab(v)
+        GRAB.Enabled=v
+        if grabTask then task.cancel(grabTask); grabTask=nil end
+        if v then
+            grabTask=task.spawn(function()
+                while GRAB.Enabled do
+                    grabBestOnce(true)
+                    if GRAB.ReturnToPlot then task.wait(0.25); tpToPart(getPlot(),8) end
+                    task.wait(GRAB.Delay)
+                end
+            end)
+        end
+    end
+    table.insert(cleanupHooks,function() setAutoGrab(false) end)
+
+    makeModCard(WingsPage,"Auto Grab Best",GRAB,"Enabled",
+        function(v) setAutoGrab(v) end,
+        "Teleports to the highest $/s brainrot, fires its E prompt to grab it, then returns to your plot. Loops.",
+        function(sf)
+            makeSlider(sf,"Delay",0.3,5,GRAB.Delay,0.1,"%.1f s",function(v) GRAB.Delay=v end)
+            makeToggle(sf,"Return To Plot After Grab",GRAB.ReturnToPlot,function(v) GRAB.ReturnToPlot=v end)
+            makeButton(sf,"Grab Best Once",function() task.spawn(function() grabBestOnce(false) end) end)
+            makeButton(sf,"Find Prompts Near Me (F9)",function()
+                local hrp=getHRP(); if not hrp then notify("Wings: no character") return end
+                local prompts=getAllPrompts()
+                table.sort(prompts,function(a,b)
+                    local pa=(a.Parent and a.Parent:IsA("BasePart")) and a.Parent.Position or Vector3.new(1e9,1e9,1e9)
+                    local pb=(b.Parent and b.Parent:IsA("BasePart")) and b.Parent.Position or Vector3.new(1e9,1e9,1e9)
+                    return (pa-hrp.Position).Magnitude<(pb-hrp.Position).Magnitude
+                end)
+                warn("[WINGS] "..#prompts.." ProximityPrompts total. Nearest 10:")
+                for i=1,math.min(10,#prompts) do
+                    local pr=prompts[i]
+                    local par=pr.Parent
+                    local d=(par and par:IsA("BasePart")) and math.floor((par.Position-hrp.Position).Magnitude) or -1
+                    warn(string.format("  [%dm] %s | Action=%q | @ %s",d,pr.Name,pr.ActionText,pr:GetFullName()))
+                end
+                notify("Wings: nearest prompts dumped to F9")
+            end)
+        end
+    )
 end
 _setupWings()
 
