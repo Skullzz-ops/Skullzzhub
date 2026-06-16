@@ -3164,22 +3164,57 @@ local function _setupNoob()
         if suf~="" and SUF[suf] then v=v*SUF[suf] end
         return v
     end
-    -- read current money from leaderstats / attributes (nil if unknown)
+    -- call GetPlayerData RemoteFunction and return whatever it gives (table, usually)
+    local function invokeData()
+        local net=RS:FindFirstChild("__Net"); if not net then return nil end
+        local rf=net:FindFirstChild("GetPlayerData")
+        if not rf or not rf:IsA("RemoteFunction") then return nil end
+        local ok,res=pcall(function() return rf:InvokeServer() end)
+        if ok then return res end
+        return nil
+    end
+    -- recursively search a table for the first key matching one of the words, numeric value
+    local CASH_WORDS={"oof"}  -- currency in this game is "Oof"
+    local function searchData(tbl,words,depth,seen)
+        if type(tbl)~="table" or depth>5 then return nil end
+        seen=seen or {}
+        if seen[tbl] then return nil end
+        seen[tbl]=true
+        for k,v in pairs(tbl) do
+            local key=tostring(k):lower()
+            for _,w in ipairs(words) do
+                if key:find(w) then
+                    local n=parseNum(v)
+                    if n then return n end
+                end
+            end
+        end
+        -- recurse into nested tables
+        for _,v in pairs(tbl) do
+            if type(v)=="table" then
+                local n=searchData(v,words,depth+1,seen)
+                if n then return n end
+            end
+        end
+        return nil
+    end
+    -- read current Oof balance: GetPlayerData first, then leaderstats "Oof"
     local function getCash()
+        local data=invokeData()
+        if data then
+            local n=searchData(data,CASH_WORDS,0,nil)
+            if n then return n end
+        end
         local ls=LP:FindFirstChild("leaderstats")
         if ls then
             for _,v in ipairs(ls:GetChildren()) do
                 if v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue") then
                     local nm=v.Name:lower()
-                    if nm:find("cash") or nm:find("money") or nm:find("coin") or nm:find("dollar") or nm:find("balance") then
+                    if nm:find("oof") or nm:find("cash") or nm:find("money") or nm:find("coin") or nm:find("dollar") or nm:find("balance") then
                         return parseNum(v.Value)
                     end
                 end
             end
-        end
-        for _,nm in ipairs({"Cash","Money","Coins","Dollars","Balance","Currency"}) do
-            local ok,val=pcall(function() return LP:GetAttribute(nm) end)
-            if ok and val~=nil then local n=parseNum(val); if n then return n end end
         end
         return nil
     end
@@ -3291,7 +3326,7 @@ local function _setupNoob()
             makeButton(sf,"Upgrade All Once",function() upgradesOnce(false) end)
             makeButton(sf,"Debug: Prices + Cash (F9)",function()
                 local cash=getCash()
-                warn("[NOOB] cash="..tostring(cash))
+                warn("[NOOB] cash(Oof)="..tostring(cash))
                 warn("[NOOB] detected prices (nil = couldn't read, fires anyway):")
                 for _,n in ipairs(NOOB_NAMES) do
                     warn(string.format("   NOOB %s → price=%s",n,tostring(findPriceFor(n))))
@@ -3300,6 +3335,28 @@ local function _setupNoob()
                     warn(string.format("   UPG %s/%s → price=%s",u[1],u[2],tostring(findPriceFor(u[2]))))
                 end
                 notify("Noob: prices/cash dumped to F9")
+            end)
+            makeButton(sf,"Debug: GetPlayerData (F9)",function()
+                local data=invokeData()
+                if data==nil then warn("[NOOB] GetPlayerData returned nil") notify("Noob: no data") return end
+                if type(data)~="table" then warn("[NOOB] GetPlayerData = "..tostring(data)) notify("Noob: data dumped") return end
+                warn("[NOOB] ===== GetPlayerData dump =====")
+                local function dump(t,indent,depth,seen)
+                    if depth>5 then return end
+                    seen=seen or {}
+                    if seen[t] then warn(indent.."<cycle>") return end
+                    seen[t]=true
+                    for k,v in pairs(t) do
+                        if type(v)=="table" then
+                            warn(string.format("%s%s:",indent,tostring(k)))
+                            dump(v,indent.."   ",depth+1,seen)
+                        else
+                            warn(string.format("%s%s = %s",indent,tostring(k),tostring(v)))
+                        end
+                    end
+                end
+                dump(data,"  ",0,nil)
+                notify("Noob: GetPlayerData dumped to F9")
             end)
             makeButton(sf,"Debug: Dump __Net (F9)",function()
                 local net=RS:FindFirstChild("__Net")
